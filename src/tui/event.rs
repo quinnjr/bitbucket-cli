@@ -38,14 +38,10 @@ impl EventHandler {
                         Ok(event::Event::Key(key)) if tx.send(Event::Key(key)).is_err() => {
                             break;
                         }
-                        Ok(event::Event::Mouse(mouse))
-                            if tx.send(Event::Mouse(mouse)).is_err() =>
-                        {
+                        Ok(event::Event::Mouse(mouse)) if tx.send(Event::Mouse(mouse)).is_err() => {
                             break;
                         }
-                        Ok(event::Event::Resize(w, h))
-                            if tx.send(Event::Resize(w, h)).is_err() =>
-                        {
+                        Ok(event::Event::Resize(w, h)) if tx.send(Event::Resize(w, h)).is_err() => {
                             break;
                         }
                         Ok(_) => {}
