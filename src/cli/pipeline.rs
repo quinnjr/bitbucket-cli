@@ -358,7 +358,10 @@ fn parse_repo(repo: &str) -> Result<(String, String)> {
     Ok((parts[0].to_string(), parts[1].to_string()))
 }
 
-pub(crate) fn format_status(state: &PipelineStateName, result: Option<&PipelineResultName>) -> String {
+pub(crate) fn format_status(
+    state: &PipelineStateName,
+    result: Option<&PipelineResultName>,
+) -> String {
     match state {
         PipelineStateName::Pending => "PENDING".yellow().to_string(),
         PipelineStateName::InProgress => "RUNNING".blue().to_string(),
