@@ -1,4 +1,4 @@
-<?xml version='1.0' encoding='windows-1252'?>
+<?xml version='1.0' encoding='utf-8'?>
 <Wix xmlns='http://schemas.microsoft.com/wix/2006/wi'>
     <Product
         Id='*'
@@ -6,8 +6,7 @@
         UpgradeCode='12345678-1234-1234-1234-123456789012'
         Manufacturer='Pegasus Heavy Industries'
         Language='1033'
-        Codepage='1252'
-        Version='0.2.0'>
+        Version='0.3.14'>
 
         <Package
             Id='*'
@@ -17,8 +16,7 @@
             InstallerVersion='450'
             Languages='1033'
             Compressed='yes'
-            InstallScope='perMachine'
-            SummaryCodepage='1252' />
+            InstallScope='perMachine' />
 
         <MajorUpgrade
             Schedule='afterInstallInitialize'
@@ -35,7 +33,7 @@
                             Id='bitbucketEXE'
                             Name='bitbucket.exe'
                             DiskId='1'
-                            Source='target\release\bitbucket.exe'
+                            Source='target\x86_64-pc-windows-msvc\release\bitbucket.exe'
                             KeyPath='yes' />
                         <Environment
                             Id='PATH'
