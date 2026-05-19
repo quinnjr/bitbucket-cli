@@ -159,6 +159,19 @@ pub enum PrCommands {
         /// Comment ID
         comment_id: u64,
     },
+
+    /// List pipelines for the PR's head commit
+    Pipelines {
+        /// Repository in format workspace/repo-slug
+        repo: String,
+
+        /// Pull request ID
+        id: u64,
+
+        /// Maximum recent pipelines to scan for matches (capped at 100)
+        #[arg(short, long, default_value = "100")]
+        scan_limit: u32,
+    },
 }
 
 #[derive(ValueEnum, Clone)]
@@ -209,6 +222,22 @@ struct PrRow {
     state: String,
     #[tabled(rename = "UPDATED")]
     updated: String,
+}
+
+#[derive(Tabled)]
+struct PipelineRow {
+    #[tabled(rename = "#")]
+    build: u64,
+    #[tabled(rename = "STATUS")]
+    status: String,
+    #[tabled(rename = "BRANCH")]
+    branch: String,
+    #[tabled(rename = "COMMIT")]
+    commit: String,
+    #[tabled(rename = "TRIGGERED")]
+    triggered: String,
+    #[tabled(rename = "DURATION")]
+    duration: String,
 }
 
 #[derive(Tabled)]
@@ -536,6 +565,71 @@ impl PrCommands {
 
                 let table = Table::new(rows).to_string();
                 println!("{}", table);
+
+                Ok(())
+            }
+
+            PrCommands::Pipelines {
+                repo,
+                id,
+                scan_limit,
+            } => {
+                let (workspace, repo_slug) = parse_repo(&repo)?;
+                let client = BitbucketClient::from_stored().await?;
+
+                let pr = client.get_pull_request(&workspace, &repo_slug, id).await?;
+                let head_commit = pr
+                    .source
+                    .commit
+                    .as_ref()
+                    .map(|c| c.hash.clone())
+                    .context("PR has no head commit hash")?;
+
+                let pipelines = client
+                    .list_pipelines_for_commit(&workspace, &repo_slug, &head_commit, scan_limit)
+                    .await?;
+
+                if pipelines.is_empty() {
+                    println!(
+                        "No pipelines found for PR #{} head commit {} (scanned {} most recent).",
+                        id,
+                        head_commit.chars().take(12).collect::<String>(),
+                        scan_limit.clamp(1, 100)
+                    );
+                    return Ok(());
+                }
+
+                let rows: Vec<PipelineRow> = pipelines
+                    .iter()
+                    .map(|p| {
+                        let duration = match (p.build_seconds_used, &p.state.name) {
+                            (Some(s), _) => super::pipeline::format_duration(s),
+                            (None, crate::models::PipelineStateName::InProgress) => {
+                                "running...".to_string()
+                            }
+                            _ => "-".to_string(),
+                        };
+
+                        PipelineRow {
+                            build: p.build_number,
+                            status: super::pipeline::format_status(
+                                &p.state.name,
+                                p.state.result.as_ref().map(|r| &r.name),
+                            ),
+                            branch: p.target.ref_name.clone().unwrap_or_else(|| "-".to_string()),
+                            commit: p
+                                .target
+                                .commit
+                                .as_ref()
+                                .map(|c| c.hash.chars().take(12).collect())
+                                .unwrap_or_else(|| "-".to_string()),
+                            triggered: p.created_on.format("%Y-%m-%d %H:%M").to_string(),
+                            duration,
+                        }
+                    })
+                    .collect();
+
+                println!("{}", Table::new(rows));
 
                 Ok(())
             }

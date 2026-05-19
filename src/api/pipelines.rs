@@ -124,6 +124,39 @@ impl BitbucketClient {
         }
     }
 
+    /// List pipelines whose target commit matches `commit_hash`, newest first.
+    ///
+    /// Bitbucket's pipelines endpoint does not expose a server-side filter on
+    /// `target.commit.hash` (both the `?target.commit.hash=` query param and
+    /// the BBQL `q=` filter are silently ignored as of the 2.0 API), so this
+    /// fetches the most recent pipelines and filters client-side. `scan_limit`
+    /// bounds how many of the repo's recent pipelines are scanned and is
+    /// capped at Bitbucket's pagelen ceiling of 100; on repos that churn more
+    /// than 100 pipelines between the commit landing and this call, matches
+    /// older than that window will be missed.
+    pub async fn list_pipelines_for_commit(
+        &self,
+        workspace: &str,
+        repo_slug: &str,
+        commit_hash: &str,
+        scan_limit: u32,
+    ) -> Result<Vec<Pipeline>> {
+        let pagelen = scan_limit.clamp(1, 100);
+        let pipelines = self
+            .list_pipelines(workspace, repo_slug, None, Some(pagelen))
+            .await?;
+        Ok(pipelines
+            .values
+            .into_iter()
+            .filter(|p| {
+                p.target
+                    .commit
+                    .as_ref()
+                    .is_some_and(|c| commit_hashes_match(&c.hash, commit_hash))
+            })
+            .collect())
+    }
+
     /// Get pipeline by build number
     pub async fn get_pipeline_by_build_number(
         &self,
@@ -141,5 +174,55 @@ impl BitbucketClient {
             .into_iter()
             .find(|p| p.build_number == build_number)
             .ok_or_else(|| anyhow::anyhow!("Pipeline #{} not found", build_number))
+    }
+}
+
+/// Compare two git commit hashes that may differ in length.
+///
+/// Bitbucket's pull-request API returns a 12-char short hash while the
+/// pipelines API returns the full 40-char hash. Match by treating the
+/// shorter of the two as a prefix of the longer.
+fn commit_hashes_match(a: &str, b: &str) -> bool {
+    let (long, short) = if a.len() >= b.len() { (a, b) } else { (b, a) };
+    !short.is_empty() && long.starts_with(short)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::commit_hashes_match;
+
+    #[test]
+    fn exact_equality_matches() {
+        assert!(commit_hashes_match("abc123", "abc123"));
+    }
+
+    #[test]
+    fn short_pr_hash_matches_full_pipeline_hash() {
+        assert!(commit_hashes_match(
+            "975f24a99dab12345abc678def910ghi112233jk",
+            "975f24a99dab"
+        ));
+    }
+
+    #[test]
+    fn full_pr_hash_matches_short_pipeline_hash() {
+        assert!(commit_hashes_match(
+            "975f24a99dab",
+            "975f24a99dab12345abc678def910ghi112233jk"
+        ));
+    }
+
+    #[test]
+    fn different_commits_do_not_match() {
+        assert!(!commit_hashes_match("abc123def", "abc999def"));
+    }
+
+    #[test]
+    fn empty_hash_never_matches() {
+        // Guard against false positives if the API returns a missing hash
+        // that somehow deserializes to an empty string.
+        assert!(!commit_hashes_match("", "abc123"));
+        assert!(!commit_hashes_match("abc123", ""));
+        assert!(!commit_hashes_match("", ""));
     }
 }
