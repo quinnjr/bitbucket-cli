@@ -4,6 +4,9 @@
 Cargo.lock
 !Cargo.lock
 
+# Git worktrees
+.worktrees/
+
 # IDE
 .idea/
 .vscode/
