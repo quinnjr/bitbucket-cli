@@ -5,7 +5,7 @@
     <Package
         Name="Bitbucket CLI"
         Manufacturer="Pegasus Heavy Industries"
-        Version="0.3.16"
+        Version="0.3.17"
         UpgradeCode="12345678-1234-1234-1234-123456789012"
         Scope="perMachine"
         InstallerVersion="450"

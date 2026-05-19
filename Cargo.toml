@@ -1,6 +1,6 @@
 [package]
 name = "bitbucket-cli"
-version = "0.3.16"
+version = "0.3.17"
 edition = "2024"
 rust-version = "1.85"
 description = "A powerful command-line interface for Bitbucket Cloud - manage repos, PRs, issues, and pipelines from your terminal with OAuth 2.0"
