@@ -252,7 +252,7 @@ jobs:
         if: matrix.package_type == 'msi'
         shell: pwsh
         run: |
-          wix -acceptEula wix7 build -arch x64 -o bitbucket-cli.msi packaging/windows/main.wxs
+          wix -acceptEula wix7 build -arch x64 -ext WixToolset.UI.wixext -o bitbucket-cli.msi packaging/windows/main.wxs
 
       - name: Upload MSI installer
         if: matrix.package_type == 'msi'
