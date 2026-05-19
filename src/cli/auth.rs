@@ -1,7 +1,7 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::Subcommand;
 use colored::Colorize;
-use dialoguer::Input;
+use dialoguer::{Input, Select};
 
 use crate::auth::{ApiKeyAuth, AuthManager, OAuthFlow};
 use crate::config::Config;
@@ -10,8 +10,12 @@ use crate::config::Config;
 pub enum AuthCommands {
     /// Authenticate with Bitbucket (OAuth 2.0 or API key)
     Login {
-        /// Use API key authentication (for automation/CI)
-        #[arg(long)]
+        /// Use OAuth 2.0 authentication (interactive browser sign-in)
+        #[arg(long, conflicts_with = "api_key")]
+        oauth: bool,
+
+        /// Use API key authentication (HTTP access token; for automation/CI)
+        #[arg(long, conflicts_with = "oauth")]
         api_key: bool,
 
         /// OAuth Client ID (for OAuth authentication)
@@ -34,19 +38,25 @@ impl AuthCommands {
     pub async fn run(self) -> Result<()> {
         match self {
             AuthCommands::Login {
+                oauth,
                 api_key,
                 client_id,
                 client_secret,
             } => {
                 let auth_manager = AuthManager::new()?;
 
-                // If --api-key flag is set, use API key authentication
-                if api_key {
+                let use_api_key = resolve_auth_method(
+                    oauth,
+                    api_key,
+                    client_id.is_some() || client_secret.is_some(),
+                )?;
+
+                if use_api_key {
                     ApiKeyAuth::authenticate(&auth_manager).await?;
                     return Ok(());
                 }
 
-                // Otherwise, use OAuth 2.0 authentication
+                // OAuth 2.0 authentication.
                 // Resolve consumer credentials from (in priority):
                 // 1. CLI flags / env vars
                 // 2. Previously stored credentials
@@ -172,4 +182,42 @@ impl AuthCommands {
             }
         }
     }
+}
+
+/// Resolve which authentication method to use.
+///
+/// Returns `true` for API key, `false` for OAuth 2.0.
+///
+/// Priority: explicit flag > OAuth-implying inputs > interactive prompt.
+fn resolve_auth_method(oauth: bool, api_key: bool, oauth_inputs_present: bool) -> Result<bool> {
+    if api_key {
+        return Ok(true);
+    }
+    if oauth || oauth_inputs_present {
+        return Ok(false);
+    }
+
+    println!();
+    println!("{}", "Choose an authentication method".bold());
+    println!();
+    println!(
+        "  {}  Browser-based sign-in. Recommended for interactive use.",
+        "OAuth 2.0".cyan()
+    );
+    println!(
+        "  {}     HTTP access token. For automation, CI, and headless environments.",
+        "API key".cyan()
+    );
+    println!();
+
+    let options = ["OAuth 2.0 (browser sign-in)", "API key (access token)"];
+
+    let selection = Select::new()
+        .with_prompt("Authentication method")
+        .items(&options)
+        .default(0)
+        .interact()
+        .context("Failed to read authentication method selection")?;
+
+    Ok(selection == 1)
 }
