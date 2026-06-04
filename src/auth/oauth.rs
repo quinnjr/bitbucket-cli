@@ -112,6 +112,9 @@ impl OAuthFlow {
         let (auth_url, csrf_token) = client
             .authorize_url(CsrfToken::new_random)
             .add_scope(Scope::new("repository".to_string()))
+            // Required to upload repository downloads (`repo download upload`).
+            // Existing users must re-run `auth login` to consent.
+            .add_scope(Scope::new("repository:write".to_string()))
             .add_scope(Scope::new("pullrequest".to_string()))
             .add_scope(Scope::new("issue".to_string()))
             .add_scope(Scope::new("pipeline".to_string()))

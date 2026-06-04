@@ -9,7 +9,7 @@ A powerful command-line interface for Bitbucket Cloud. Manage repositories, pull
 
 ## ✨ Features
 
-- 📁 **Repository Management** - List, view, clone, create, and manage repositories
+- 📁 **Repository Management** - List, view, clone, create, manage repositories, and upload/manage downloads
 - 🔀 **Pull Requests** - Create, review, merge, approve, and manage PRs
 - 🐛 **Issue Tracking** - Create, view, comment on, and manage issues
 - ⚡ **Pipelines** - Trigger, monitor, and manage CI/CD pipelines
@@ -135,6 +135,10 @@ bitbucket pr list myworkspace/myrepo
 # Create a pull request
 bitbucket pr create myworkspace/myrepo --title "My PR" --source feature-branch
 
+# Upload a file (e.g. a screenshot) to the repo downloads area, then
+# reference the printed URL from a PR description or comment as ![](url)
+bitbucket repo download upload myworkspace/myrepo screenshot.png
+
 # Launch interactive TUI
 bitbucket tui --workspace myworkspace
 ```
@@ -144,7 +148,7 @@ bitbucket tui --workspace myworkspace
 | Command | Description |
 |---------|-------------|
 | `bitbucket auth` | Manage authentication (login, logout, status) |
-| `bitbucket repo` | Manage repositories (list, view, clone, create, fork, delete) |
+| `bitbucket repo` | Manage repositories (list, view, clone, create, fork, delete, download) |
 | `bitbucket pr` | Manage pull requests (list, view, create, merge, approve, decline) |
 | `bitbucket issue` | Manage issues (list, view, create, comment, close, reopen) |
 | `bitbucket pipeline` | Manage pipelines (list, view, trigger, stop) |
