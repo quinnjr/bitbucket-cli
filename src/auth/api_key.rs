@@ -1,7 +1,19 @@
 use anyhow::{Context, Result};
-use dialoguer::{Input, Password};
+use dialoguer::Input;
 
 use super::{AuthManager, Credential};
+
+/// Strip bracketed-paste escape markers and control characters that some
+/// terminals inject when a token is pasted, then trim surrounding whitespace.
+fn sanitize_pasted_token(raw: &str) -> String {
+    raw.replace("\x1b[200~", "")
+        .replace("\x1b[201~", "")
+        .chars()
+        .filter(|c| !c.is_control())
+        .collect::<String>()
+        .trim()
+        .to_string()
+}
 
 /// API key authentication flow (fallback method)
 /// Note: Atlassian has deprecated app passwords in favor of OAuth2
@@ -28,13 +40,13 @@ impl ApiKeyAuth {
             .interact_text()
             .context("Failed to read username")?;
 
-        let api_key: String = Password::new()
-            .with_prompt("API key (HTTP access token)")
-            .interact()
+        // rpassword reads a full line with echo disabled, so terminal paste
+        // works — dialoguer's Password reads key events and drops pasted input
+        // in many terminals.
+        let api_key = rpassword::prompt_password("API key (HTTP access token): ")
             .context("Failed to read API key")?;
 
-        // Trim whitespace from token (common copy-paste issue)
-        let api_key = api_key.trim().to_string();
+        let api_key = sanitize_pasted_token(&api_key);
 
         // Validate token format
         if api_key.is_empty() {
@@ -113,5 +125,33 @@ impl ApiKeyAuth {
                 body
             )
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::sanitize_pasted_token;
+
+    #[test]
+    fn passes_through_clean_token() {
+        assert_eq!(sanitize_pasted_token("ATATT123abc"), "ATATT123abc");
+    }
+
+    #[test]
+    fn trims_surrounding_whitespace_and_newline() {
+        assert_eq!(sanitize_pasted_token("  ATATT123abc\n"), "ATATT123abc");
+    }
+
+    #[test]
+    fn strips_bracketed_paste_markers() {
+        assert_eq!(
+            sanitize_pasted_token("\x1b[200~ATATT123abc\x1b[201~"),
+            "ATATT123abc"
+        );
+    }
+
+    #[test]
+    fn strips_stray_control_characters() {
+        assert_eq!(sanitize_pasted_token("ATATT\x07123\tabc\r"), "ATATT123abc");
     }
 }
