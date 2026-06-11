@@ -20,33 +20,53 @@ fn sanitize_pasted_token(raw: &str) -> String {
 pub struct ApiKeyAuth;
 
 impl ApiKeyAuth {
-    /// Run the interactive API key authentication flow
-    pub async fn authenticate(auth_manager: &AuthManager) -> Result<Credential> {
-        println!("\n🔐 Bitbucket API Key Authentication");
-        println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-        println!();
-        println!("⚠️  Note: OAuth 2.0 is the preferred authentication method.");
-        println!("   API keys are provided for automation/CI scenarios.");
-        println!();
-        println!("To create an API key (HTTP access token):");
-        println!("1. Go to Bitbucket Settings → Personal settings");
-        println!("2. Click 'HTTP access tokens' under 'Access management'");
-        println!("3. Click 'Create token'");
-        println!("4. Give it a label and select required permissions");
-        println!();
+    /// Run the API key authentication flow.
+    ///
+    /// `email` and `api_key` may be supplied up front (via CLI flags or env
+    /// vars) to skip the corresponding prompts; when both are present the
+    /// flow is fully non-interactive.
+    pub async fn authenticate(
+        auth_manager: &AuthManager,
+        email: Option<String>,
+        api_key: Option<String>,
+    ) -> Result<Credential> {
+        if email.is_none() || api_key.is_none() {
+            println!("\n🔐 Bitbucket API Key Authentication");
+            println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+            println!();
+            println!("⚠️  Note: OAuth 2.0 is the preferred authentication method.");
+            println!("   API keys are provided for automation/CI scenarios.");
+            println!();
+            println!("To create an API key (HTTP access token):");
+            println!("1. Go to Bitbucket Settings → Personal settings");
+            println!("2. Click 'HTTP access tokens' under 'Access management'");
+            println!("3. Click 'Create token'");
+            println!("4. Give it a label and select required permissions");
+            println!();
+        }
 
-        let username: String = Input::new()
-            .with_prompt("Bitbucket username")
-            .interact_text()
-            .context("Failed to read username")?;
+        let username: String = match email {
+            Some(email) => email,
+            None => Input::new()
+                .with_prompt("Atlassian account email / Bitbucket username")
+                .interact_text()
+                .context("Failed to read username")?,
+        };
 
-        // rpassword reads a full line with echo disabled, so terminal paste
-        // works — dialoguer's Password reads key events and drops pasted input
-        // in many terminals.
-        let api_key = rpassword::prompt_password("API key (HTTP access token): ")
-            .context("Failed to read API key")?;
+        let api_key = match api_key {
+            Some(api_key) => api_key,
+            // rpassword reads a full line with echo disabled, so terminal
+            // paste works — dialoguer's Password reads key events and drops
+            // pasted input in many terminals.
+            None => rpassword::prompt_password("API key (HTTP access token): ")
+                .context("Failed to read API key")?,
+        };
 
         let api_key = sanitize_pasted_token(&api_key);
+
+        if username.trim().is_empty() {
+            anyhow::bail!("Email/username cannot be empty");
+        }
 
         // Validate token format
         if api_key.is_empty() {

@@ -18,6 +18,14 @@ pub enum AuthCommands {
         #[arg(long, conflicts_with = "oauth")]
         api_key: bool,
 
+        /// Atlassian account email / Bitbucket username (for API key authentication)
+        #[arg(long, env = "BITBUCKET_EMAIL", conflicts_with = "oauth")]
+        email: Option<String>,
+
+        /// API key (HTTP access token; for API key authentication, implies --api-key)
+        #[arg(long, env = "BITBUCKET_API_TOKEN", conflicts_with = "oauth")]
+        token: Option<String>,
+
         /// OAuth Client ID (for OAuth authentication)
         #[arg(long, env = "BITBUCKET_CLIENT_ID")]
         client_id: Option<String>,
@@ -40,6 +48,8 @@ impl AuthCommands {
             AuthCommands::Login {
                 oauth,
                 api_key,
+                email,
+                token,
                 client_id,
                 client_secret,
             } => {
@@ -48,11 +58,12 @@ impl AuthCommands {
                 let use_api_key = resolve_auth_method(
                     oauth,
                     api_key,
+                    email.is_some() || token.is_some(),
                     client_id.is_some() || client_secret.is_some(),
                 )?;
 
                 if use_api_key {
-                    ApiKeyAuth::authenticate(&auth_manager).await?;
+                    ApiKeyAuth::authenticate(&auth_manager, email, token).await?;
                     return Ok(());
                 }
 
@@ -188,9 +199,14 @@ impl AuthCommands {
 ///
 /// Returns `true` for API key, `false` for OAuth 2.0.
 ///
-/// Priority: explicit flag > OAuth-implying inputs > interactive prompt.
-fn resolve_auth_method(oauth: bool, api_key: bool, oauth_inputs_present: bool) -> Result<bool> {
-    if api_key {
+/// Priority: explicit flag > method-implying inputs > interactive prompt.
+fn resolve_auth_method(
+    oauth: bool,
+    api_key: bool,
+    api_key_inputs_present: bool,
+    oauth_inputs_present: bool,
+) -> Result<bool> {
+    if api_key || api_key_inputs_present {
         return Ok(true);
     }
     if oauth || oauth_inputs_present {
@@ -220,4 +236,34 @@ fn resolve_auth_method(oauth: bool, api_key: bool, oauth_inputs_present: bool) -
         .context("Failed to read authentication method selection")?;
 
     Ok(selection == 1)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::resolve_auth_method;
+
+    #[test]
+    fn explicit_api_key_flag_selects_api_key() {
+        assert!(resolve_auth_method(false, true, false, false).unwrap());
+    }
+
+    #[test]
+    fn explicit_oauth_flag_selects_oauth() {
+        assert!(!resolve_auth_method(true, false, false, false).unwrap());
+    }
+
+    #[test]
+    fn email_or_token_implies_api_key() {
+        assert!(resolve_auth_method(false, false, true, false).unwrap());
+    }
+
+    #[test]
+    fn oauth_inputs_imply_oauth() {
+        assert!(!resolve_auth_method(false, false, false, true).unwrap());
+    }
+
+    #[test]
+    fn api_key_inputs_win_over_oauth_inputs() {
+        assert!(resolve_auth_method(false, false, true, true).unwrap());
+    }
 }
