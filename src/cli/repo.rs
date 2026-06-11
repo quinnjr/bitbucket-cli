@@ -1,9 +1,11 @@
+use std::path::PathBuf;
+
 use anyhow::{Context, Result};
 use clap::Subcommand;
 use colored::Colorize;
 use tabled::{Table, Tabled};
 
-use crate::api::BitbucketClient;
+use crate::api::{BitbucketClient, download_url, upload_name_for};
 use crate::models::CreateRepositoryRequest;
 
 #[derive(Subcommand)]
@@ -81,6 +83,44 @@ pub enum RepoCommands {
     Delete {
         /// Repository in format workspace/repo-slug
         repo: String,
+
+        /// Skip confirmation prompt
+        #[arg(short, long)]
+        yes: bool,
+    },
+
+    /// Manage repository downloads (uploaded file artifacts)
+    Download {
+        #[command(subcommand)]
+        command: DownloadCommands,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum DownloadCommands {
+    /// Upload one or more files to the repository's downloads area
+    Upload {
+        /// Repository in format workspace/repo-slug
+        repo: String,
+
+        /// File(s) to upload. Uploading a file whose name already exists replaces it.
+        #[arg(required = true)]
+        files: Vec<PathBuf>,
+    },
+
+    /// List artifacts in the repository's downloads area
+    List {
+        /// Repository in format workspace/repo-slug
+        repo: String,
+    },
+
+    /// Delete an artifact from the repository's downloads area
+    Delete {
+        /// Repository in format workspace/repo-slug
+        repo: String,
+
+        /// Name of the artifact to delete
+        name: String,
 
         /// Skip confirmation prompt
         #[arg(short, long)]
@@ -359,7 +399,121 @@ impl RepoCommands {
 
                 Ok(())
             }
+
+            RepoCommands::Download { command } => command.run().await,
         }
+    }
+}
+
+#[derive(Tabled)]
+struct DownloadRow {
+    #[tabled(rename = "NAME")]
+    name: String,
+    #[tabled(rename = "SIZE")]
+    size: String,
+    #[tabled(rename = "DOWNLOADS")]
+    downloads: String,
+}
+
+impl DownloadCommands {
+    pub async fn run(self) -> Result<()> {
+        match self {
+            DownloadCommands::Upload { repo, files } => {
+                let (workspace, repo_slug) = parse_repo(&repo)?;
+
+                // Resolve each path to (upload-name, path) up front so a bad path
+                // fails before we open a network connection.
+                let uploads: Vec<(String, PathBuf)> = files
+                    .iter()
+                    .map(|p| Ok((upload_name_for(p)?, p.clone())))
+                    .collect::<Result<_>>()?;
+
+                let client = BitbucketClient::from_stored().await?;
+                client
+                    .upload_downloads(&workspace, &repo_slug, &uploads)
+                    .await?;
+
+                for (name, _) in &uploads {
+                    println!(
+                        "{} Uploaded {}",
+                        "✓".green(),
+                        download_url(&workspace, &repo_slug, name).cyan()
+                    );
+                }
+
+                Ok(())
+            }
+
+            DownloadCommands::List { repo } => {
+                let (workspace, repo_slug) = parse_repo(&repo)?;
+                let client = BitbucketClient::from_stored().await?;
+                let downloads = client.list_downloads(&workspace, &repo_slug).await?;
+
+                if downloads.values.is_empty() {
+                    println!("No downloads found in {}", repo);
+                    return Ok(());
+                }
+
+                let rows: Vec<DownloadRow> = downloads
+                    .values
+                    .iter()
+                    .map(|d| DownloadRow {
+                        name: d.name.clone(),
+                        size: d.size.map(format_size).unwrap_or_else(|| "-".to_string()),
+                        downloads: d
+                            .downloads
+                            .map(|n| n.to_string())
+                            .unwrap_or_else(|| "-".to_string()),
+                    })
+                    .collect();
+
+                println!("{}", Table::new(rows));
+
+                Ok(())
+            }
+
+            DownloadCommands::Delete { repo, name, yes } => {
+                let (workspace, repo_slug) = parse_repo(&repo)?;
+
+                if !yes {
+                    use dialoguer::Confirm;
+                    let confirmed = Confirm::new()
+                        .with_prompt(format!("Delete download {} from {}?", name.red(), repo))
+                        .default(false)
+                        .interact()?;
+
+                    if !confirmed {
+                        println!("Aborted");
+                        return Ok(());
+                    }
+                }
+
+                let client = BitbucketClient::from_stored().await?;
+                client
+                    .delete_download(&workspace, &repo_slug, &name)
+                    .await?;
+
+                println!("{} Deleted download {}", "✓".green(), name);
+
+                Ok(())
+            }
+        }
+    }
+}
+
+/// Format a byte count into a short human-readable string.
+fn format_size(bytes: u64) -> String {
+    const UNITS: [&str; 5] = ["B", "KB", "MB", "GB", "TB"];
+    let mut size = bytes as f64;
+    let mut unit = 0;
+    while size >= 1024.0 && unit < UNITS.len() - 1 {
+        size /= 1024.0;
+        unit += 1;
+    }
+    if unit == 0 {
+        format!("{} {}", bytes, UNITS[unit])
+    } else {
+        format!("{:.1} {}", size, UNITS[unit])
     }
 }
 
@@ -372,4 +526,37 @@ fn parse_repo(repo: &str) -> Result<(String, String)> {
         );
     }
     Ok((parts[0].to_string(), parts[1].to_string()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_repo_splits_workspace_and_slug() {
+        let (ws, slug) = parse_repo("acme/widgets").unwrap();
+        assert_eq!(ws, "acme");
+        assert_eq!(slug, "widgets");
+    }
+
+    #[test]
+    fn parse_repo_rejects_missing_slug() {
+        assert!(parse_repo("acme").is_err());
+        assert!(parse_repo("acme/widgets/extra").is_err());
+    }
+
+    #[test]
+    fn format_size_uses_bytes_below_1k() {
+        assert_eq!(format_size(0), "0 B");
+        assert_eq!(format_size(512), "512 B");
+        assert_eq!(format_size(1023), "1023 B");
+    }
+
+    #[test]
+    fn format_size_scales_to_larger_units() {
+        assert_eq!(format_size(1024), "1.0 KB");
+        assert_eq!(format_size(1536), "1.5 KB");
+        assert_eq!(format_size(1024 * 1024), "1.0 MB");
+        assert_eq!(format_size(5 * 1024 * 1024 * 1024), "5.0 GB");
+    }
 }

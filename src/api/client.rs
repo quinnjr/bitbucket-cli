@@ -135,6 +135,23 @@ impl BitbucketClient {
         self.handle_empty_response(response).await
     }
 
+    /// Make a multipart/form-data POST request, not expecting a JSON response body.
+    ///
+    /// Used for endpoints like repository downloads, which accept file uploads and
+    /// respond with `201 Created` and an empty body.
+    pub async fn post_multipart(&self, path: &str, form: reqwest::multipart::Form) -> Result<()> {
+        let response = self
+            .client
+            .post(self.url(path))
+            .header("Authorization", self.credential.auth_header())
+            .multipart(form)
+            .send()
+            .await
+            .context("Request failed")?;
+
+        self.handle_empty_response(response).await
+    }
+
     /// Make a PUT request with JSON body
     pub async fn put<T: DeserializeOwned, B: serde::Serialize>(
         &self,
