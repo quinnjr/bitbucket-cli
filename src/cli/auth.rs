@@ -230,7 +230,7 @@ fn resolve_auth_method(
 
     let selection = Select::new()
         .with_prompt("Authentication method")
-        .items(&options)
+        .items(options)
         .default(0)
         .interact()
         .context("Failed to read authentication method selection")?;
