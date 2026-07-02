@@ -135,6 +135,9 @@ bitbucket pr list myworkspace/myrepo
 # Create a pull request
 bitbucket pr create myworkspace/myrepo --title "My PR" --source feature-branch
 
+# Edit a pull request's description ($EDITOR opens prefilled with the current text)
+bitbucket pr edit myworkspace/myrepo 42
+
 # Upload a file (e.g. a screenshot) to the repo downloads area, then
 # reference the printed URL from a PR description or comment as ![](url)
 bitbucket repo download upload myworkspace/myrepo screenshot.png
@@ -149,7 +152,7 @@ bitbucket tui --workspace myworkspace
 |---------|-------------|
 | `bitbucket auth` | Manage authentication (login, logout, status) |
 | `bitbucket repo` | Manage repositories (list, view, clone, create, fork, delete, download) |
-| `bitbucket pr` | Manage pull requests (list, view, create, merge, approve, decline) |
+| `bitbucket pr` | Manage pull requests (list, view, create, edit, merge, approve, decline) |
 | `bitbucket issue` | Manage issues (list, view, create, comment, close, reopen) |
 | `bitbucket pipeline` | Manage pipelines (list, view, trigger, stop) |
 | `bitbucket tui` | Launch interactive terminal UI |

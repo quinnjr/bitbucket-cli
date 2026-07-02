@@ -47,6 +47,9 @@ bitbucket pr list myworkspace/myrepo
 # Create a pull request
 bitbucket pr create myworkspace/myrepo --title "My PR" --source feature-branch
 
+# Edit a pull request description (opens $EDITOR; --body/--title for non-interactive)
+bitbucket pr edit myworkspace/myrepo 42
+
 # Launch interactive TUI
 bitbucket tui --workspace myworkspace
 ```

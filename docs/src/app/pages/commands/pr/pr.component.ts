@@ -98,6 +98,7 @@ export class PrCommandComponent {
     { name: 'list', description: 'List pull requests for a repository' },
     { name: 'view', description: 'View pull request details' },
     { name: 'create', description: 'Create a new pull request' },
+    { name: 'edit', description: 'Edit a pull request title and/or description' },
     { name: 'merge', description: 'Merge a pull request' },
     { name: 'approve', description: 'Approve a pull request' },
     { name: 'decline', description: 'Decline a pull request' },
@@ -123,6 +124,11 @@ export class PrCommandComponent {
       description: 'Shows detailed information about PR #42.'
     },
     {
+      title: 'Edit a pull request description',
+      command: 'bitbucket pr edit myworkspace/myrepo 42',
+      description: 'Opens $EDITOR prefilled with the current description. Pass --body to set it directly, or --title to change the title.'
+    },
+    {
       title: 'Merge a pull request',
       command: 'bitbucket pr merge myworkspace/myrepo 42 --strategy squash',
       description: 'Merges PR #42 using squash merge strategy.'
@@ -139,5 +145,7 @@ export class PrCommandComponent {
     { flag: '--limit <N>', description: 'Number of results to show (default: 25)' },
     { flag: '--web', description: 'Open in browser instead of showing in terminal' },
     { flag: '--strategy <STRATEGY>', description: 'Merge strategy (merge-commit, squash, fast-forward)' },
+    { flag: '--title <TITLE>', description: 'New title when editing a pull request' },
+    { flag: '--body <BODY>', description: 'New description when editing (skips the editor)' },
   ];
 }

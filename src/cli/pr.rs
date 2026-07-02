@@ -64,6 +64,24 @@ pub enum PrCommands {
         close_source_branch: bool,
     },
 
+    /// Edit a pull request's title and/or description
+    Edit {
+        /// Repository in format workspace/repo-slug
+        repo: String,
+
+        /// Pull request ID
+        id: u64,
+
+        /// New title
+        #[arg(short, long)]
+        title: Option<String>,
+
+        /// New description. If omitted (and no other flag is given), $EDITOR
+        /// opens prefilled with the current description.
+        #[arg(short = 'b', long)]
+        body: Option<String>,
+    },
+
     /// Merge a pull request
     Merge {
         /// Repository in format workspace/repo-slug
@@ -406,6 +424,66 @@ impl PrCommands {
                 println!("{} Created pull request #{}", "✓".green(), pr.id);
 
                 if let Some(links) = &pr.links {
+                    if let Some(html) = &links.html {
+                        println!("{} {}", "URL:".dimmed(), html.href.cyan());
+                    }
+                }
+
+                Ok(())
+            }
+
+            PrCommands::Edit {
+                repo,
+                id,
+                title,
+                body,
+            } => {
+                let (workspace, repo_slug) = parse_repo(&repo)?;
+                let client = BitbucketClient::from_stored().await?;
+
+                let pr = client.get_pull_request(&workspace, &repo_slug, id).await?;
+
+                // If any flag is provided, the command is non-interactive and
+                // updates exactly the given fields. If no flag is provided, open
+                // the editor prefilled with the current description.
+                let interactive = title.is_none() && body.is_none();
+
+                let new_description = if let Some(body) = body {
+                    Some(body)
+                } else if interactive {
+                    let current = pr.description.clone().unwrap_or_default();
+                    match dialoguer::Editor::new().edit(&current)? {
+                        Some(edited) if edited != current => Some(edited),
+                        _ => {
+                            println!("No changes made to pull request #{}", id);
+                            return Ok(());
+                        }
+                    }
+                } else {
+                    None
+                };
+
+                // On a description-only change, pass the current title through so
+                // Bitbucket's PUT does not reset it.
+                let effective_title = match (&title, &new_description) {
+                    (Some(t), _) => Some(t.as_str()),
+                    (None, Some(_)) => Some(pr.title.as_str()),
+                    (None, None) => None,
+                };
+
+                let updated = client
+                    .update_pull_request(
+                        &workspace,
+                        &repo_slug,
+                        id,
+                        effective_title,
+                        new_description.as_deref(),
+                    )
+                    .await?;
+
+                println!("{} Updated pull request #{}", "✓".green(), updated.id);
+
+                if let Some(links) = &updated.links {
                     if let Some(html) = &links.html {
                         println!("{} {}", "URL:".dimmed(), html.href.cyan());
                     }
