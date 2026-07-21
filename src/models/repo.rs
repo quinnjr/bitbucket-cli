@@ -66,13 +66,6 @@ pub struct Download {
     pub size: Option<u64>,
     /// Number of times this artifact has been downloaded.
     pub downloads: Option<u64>,
-    pub links: Option<DownloadLinks>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DownloadLinks {
-    #[serde(rename = "self")]
-    pub self_link: Option<Link>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

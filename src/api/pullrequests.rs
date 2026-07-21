@@ -148,7 +148,6 @@ impl BitbucketClient {
         self.post(&path, &serde_json::json!({})).await
     }
 
-    /// List comments on a pull request
     /// List the most recent comments on a pull request, newest first.
     ///
     /// Requests pages sorted by `-created_on` and stops following the
@@ -167,26 +166,14 @@ impl BitbucketClient {
             workspace, repo_slug, pr_id
         );
 
-        let mut comments: Vec<PullRequestComment> = Vec::new();
-        let mut page: Paginated<PullRequestComment> = self
+        let first_page: Paginated<PullRequestComment> = self
             .get_with_query(&path, &[("sort", "-created_on"), ("pagelen", "100")])
             .await?;
 
-        loop {
-            comments.extend(page.values);
-
-            if comments.len() >= max_items {
-                comments.truncate(max_items);
-                break;
-            }
-
-            match page.next {
-                Some(next_url) => page = self.get_absolute(&next_url).await?,
-                None => break,
-            }
-        }
-
-        Ok(comments)
+        collect_limited(first_page, max_items, |next_url| async move {
+            self.get_absolute(&next_url).await
+        })
+        .await
     }
 
     /// Get a specific comment on a pull request
@@ -248,5 +235,113 @@ impl BitbucketClient {
         );
 
         self.get_text(&path, Some("text/plain")).await
+    }
+}
+
+/// Accumulate paginated values until `max_items` have been collected.
+///
+/// Starts from an already-fetched `first_page`, follows pagination `next`
+/// links via `fetch_next` only while fewer than `max_items` values have been
+/// collected (or until a page has no `next` link), and truncates the result
+/// to at most `max_items`.
+async fn collect_limited<T, F, Fut>(
+    first_page: Paginated<T>,
+    max_items: usize,
+    mut fetch_next: F,
+) -> Result<Vec<T>>
+where
+    F: FnMut(String) -> Fut,
+    Fut: std::future::Future<Output = Result<Paginated<T>>>,
+{
+    let mut items: Vec<T> = Vec::new();
+    let mut page = first_page;
+
+    loop {
+        items.extend(page.values);
+
+        if items.len() >= max_items {
+            items.truncate(max_items);
+            break;
+        }
+
+        match page.next {
+            Some(next_url) => page = fetch_next(next_url).await?,
+            None => break,
+        }
+    }
+
+    Ok(items)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::cell::Cell;
+    use std::future::{Ready, ready};
+
+    use super::collect_limited;
+    use crate::models::Paginated;
+
+    fn page(values: Vec<u32>, has_next: bool) -> Paginated<u32> {
+        Paginated {
+            size: None,
+            page: None,
+            pagelen: None,
+            next: has_next.then(|| "https://api.bitbucket.org/next".to_string()),
+            previous: None,
+            values,
+        }
+    }
+
+    type PageFuture = Ready<anyhow::Result<Paginated<u32>>>;
+
+    #[tokio::test]
+    async fn follows_next_links_until_exhausted_when_under_max() {
+        let calls = Cell::new(0u32);
+        let fetch = |url: String| -> PageFuture {
+            calls.set(calls.get() + 1);
+            assert_eq!(url, "https://api.bitbucket.org/next");
+            ready(Ok(page(vec![3], false)))
+        };
+
+        let items = collect_limited(page(vec![1, 2], true), 10, fetch)
+            .await
+            .expect("collection should succeed");
+
+        assert_eq!(items, vec![1, 2, 3]);
+        assert_eq!(calls.get(), 1);
+    }
+
+    #[tokio::test]
+    async fn truncates_to_max_and_stops_fetching_once_reached() {
+        let calls = Cell::new(0u32);
+        let fetch = |_url: String| -> PageFuture {
+            calls.set(calls.get() + 1);
+            // This page still advertises a `next` link, but the collection
+            // reaches `max_items` here, so no further fetch may happen.
+            ready(Ok(page(vec![3, 4], true)))
+        };
+
+        let items = collect_limited(page(vec![1, 2], true), 3, fetch)
+            .await
+            .expect("collection should succeed");
+
+        assert_eq!(items, vec![1, 2, 3]);
+        assert_eq!(calls.get(), 1);
+    }
+
+    #[tokio::test]
+    async fn exactly_max_on_first_page_makes_zero_fetches() {
+        let calls = Cell::new(0u32);
+        let fetch = |_url: String| -> PageFuture {
+            calls.set(calls.get() + 1);
+            panic!("no page beyond the first should be fetched");
+        };
+
+        let items = collect_limited(page(vec![1, 2, 3], true), 3, fetch)
+            .await
+            .expect("collection should succeed");
+
+        assert_eq!(items, vec![1, 2, 3]);
+        assert_eq!(calls.get(), 0);
     }
 }

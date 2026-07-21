@@ -121,6 +121,33 @@ pub fn parse_repo(repo: &str) -> anyhow::Result<(String, String)> {
     parse_repo_with(repo, fallback.as_deref())
 }
 
+/// Resolve `repo create`'s positional pair: an explicit second argument makes
+/// the first the workspace; otherwise the first is `workspace/name` or a bare
+/// name resolved like any repo argument.
+pub fn resolve_create_target(
+    first: String,
+    second: Option<String>,
+) -> anyhow::Result<(String, String)> {
+    let fallback = fallback_workspace();
+    resolve_create_target_with(first, second, fallback.as_deref())
+}
+
+fn resolve_create_target_with(
+    first: String,
+    second: Option<String>,
+    fallback_workspace: Option<&str>,
+) -> anyhow::Result<(String, String)> {
+    match second {
+        Some(name) => {
+            if first.contains('/') {
+                anyhow::bail!("Pass either 'workspace/name' or '<workspace> <name>', not both");
+            }
+            Ok((first, name))
+        }
+        None => parse_repo_with(&first, fallback_workspace),
+    }
+}
+
 fn parse_repo_with(
     repo: &str,
     fallback_workspace: Option<&str>,
@@ -191,6 +218,42 @@ mod tests {
     fn parse_repo_with_rejects_bare_slug_without_fallback() {
         assert!(super::parse_repo_with("slug", None).is_err());
         assert!(super::parse_repo_with("slug", Some("")).is_err());
+    }
+
+    #[test]
+    fn resolve_create_target_with_takes_explicit_workspace_and_name() {
+        let (workspace, name) =
+            super::resolve_create_target_with("ws".into(), Some("name".into()), None).unwrap();
+        assert_eq!(workspace, "ws");
+        assert_eq!(name, "name");
+    }
+
+    #[test]
+    fn resolve_create_target_with_splits_slashed_first_argument() {
+        let (workspace, name) =
+            super::resolve_create_target_with("ws/name".into(), None, None).unwrap();
+        assert_eq!(workspace, "ws");
+        assert_eq!(name, "name");
+    }
+
+    #[test]
+    fn resolve_create_target_with_resolves_bare_name_against_fallback() {
+        let (workspace, name) =
+            super::resolve_create_target_with("name".into(), None, Some("acme")).unwrap();
+        assert_eq!(workspace, "acme");
+        assert_eq!(name, "name");
+    }
+
+    #[test]
+    fn resolve_create_target_with_rejects_bare_name_without_fallback() {
+        assert!(super::resolve_create_target_with("name".into(), None, None).is_err());
+    }
+
+    #[test]
+    fn resolve_create_target_with_rejects_slashed_workspace_plus_explicit_name() {
+        assert!(
+            super::resolve_create_target_with("ws/x".into(), Some("name".into()), None).is_err()
+        );
     }
 
     #[test]

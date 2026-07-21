@@ -12,10 +12,11 @@ A feature-rich CLI tool for managing Bitbucket Cloud resources directly from you
 
 ## Key Features
 
-- Repository management: list, view, clone, create, fork, and delete repositories
-- Pull request workflows: create, review, merge, approve, and decline PRs
-- Issue tracking: create, view, comment on, close, and reopen issues
-- Pipeline management: trigger, monitor, and manage CI/CD pipelines
+- Repository management: list, view, clone, create, update, move, fork, and delete repositories, plus download artifact management (upload, list, delete)
+- Pull request workflows: list, view, create, merge, approve, decline, checkout, diff, comment, list-comments, view-comment, and pipelines
+- Issue tracking: list, view, create, comment on, close, and reopen issues
+- Pipeline management: list, view, trigger, and stop CI/CD pipelines
+- Workspace management: list workspaces
 - Interactive TUI mode with keyboard-driven navigation
 - Secure authentication via OAuth 2.0 (preferred) or API key fallback
 - Cross-platform: Linux (deb, rpm, Arch, Alpine), Windows (MSI), and from source
