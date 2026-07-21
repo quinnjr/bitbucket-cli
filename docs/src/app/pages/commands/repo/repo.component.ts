@@ -71,6 +71,7 @@ export class RepoCommandComponent {
     { name: 'move', description: 'Move a repository to a different project in its workspace' },
     { name: 'fork', description: 'Fork a repository' },
     { name: 'delete', description: 'Delete a repository' },
+    { name: 'download', description: "Manage repository downloads (upload, list, delete artifacts)" },
   ];
 
   examples = [

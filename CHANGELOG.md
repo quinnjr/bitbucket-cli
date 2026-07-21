@@ -35,6 +35,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `--workspace` or the configured default workspace.
 - `repo list` accepts an omitted workspace, and `repo create` accepts
   `workspace/name` or a bare name, resolving the workspace the same way.
+- `repo download` — upload, list, and delete repository download artifacts
+  (contributed in #69).
 
 ### Fixed
 

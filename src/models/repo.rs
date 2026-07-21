@@ -59,6 +59,22 @@ pub struct Branch {
     pub branch_type: Option<String>,
 }
 
+/// A repository download artifact (the "Downloads" area of a repo).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Download {
+    pub name: String,
+    pub size: Option<u64>,
+    /// Number of times this artifact has been downloaded.
+    pub downloads: Option<u64>,
+    pub links: Option<DownloadLinks>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DownloadLinks {
+    #[serde(rename = "self")]
+    pub self_link: Option<Link>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Project {
     pub uuid: String,

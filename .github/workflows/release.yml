@@ -15,10 +15,10 @@ jobs:
     outputs:
       upload_url: ${{ steps.create_release.outputs.upload_url }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Create Release
         id: create_release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           draft: false
           prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
@@ -53,7 +53,7 @@ jobs:
             artifact_name: bitbucket.exe
             asset_name: bitbucket-windows-amd64.exe
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -91,13 +91,13 @@ jobs:
 
       - name: Upload Release Asset (Unix)
         if: runner.os != 'Windows'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: ${{ matrix.asset_name }}.tar.gz
 
       - name: Upload Release Asset (Windows)
         if: runner.os == 'Windows'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: ${{ matrix.asset_name }}.zip
 
@@ -126,7 +126,7 @@ jobs:
             package_type: msi
             target: x86_64-pc-windows-msvc
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -154,7 +154,7 @@ jobs:
 
       - name: Upload .deb package
         if: matrix.package_type == 'deb'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: bitbucket-cli_amd64.deb
 
@@ -177,7 +177,7 @@ jobs:
 
       - name: Upload .rpm package
         if: matrix.package_type == 'rpm'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: bitbucket-cli.x86_64.rpm
 
@@ -196,7 +196,7 @@ jobs:
 
       - name: Upload Linux binary tarball and PKGBUILD
         if: matrix.package_type == 'arch'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: |
             bitbucket-cli-${{ github.ref_name }}-x86_64-linux.tar.zst
@@ -221,7 +221,7 @@ jobs:
 
       - name: Upload Alpine package artifacts
         if: matrix.package_type == 'alpine'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: |
             bitbucket-cli-${{ github.ref_name }}-alpine-x86_64.tar.gz
@@ -248,7 +248,7 @@ jobs:
 
       - name: Upload MSI installer
         if: matrix.package_type == 'msi'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: bitbucket-cli.msi
 
@@ -258,7 +258,7 @@ jobs:
     if: success()
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - name: Install dependencies
         run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev
