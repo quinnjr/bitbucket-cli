@@ -120,28 +120,16 @@ pub struct AuthConfig {
     pub default_workspace: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct DefaultsConfig {
     pub workspace: Option<String>,
     pub repository: Option<String>,
-    pub branch: Option<String>,
-}
-
-impl Default for DefaultsConfig {
-    fn default() -> Self {
-        Self {
-            workspace: None,
-            repository: None,
-            branch: Some("main".to_string()),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DisplayConfig {
     pub color: bool,
     pub pager: bool,
-    pub date_format: String,
 }
 
 impl Default for DisplayConfig {
@@ -149,7 +137,6 @@ impl Default for DisplayConfig {
         Self {
             color: true,
             pager: true,
-            date_format: "%Y-%m-%d %H:%M".to_string(),
         }
     }
 }
@@ -237,18 +224,26 @@ impl Config {
 
     /// Set the default workspace
     pub fn set_default_workspace(&mut self, workspace: &str) {
-        self.defaults.workspace = Some(workspace.to_string());
+        self.auth.default_workspace = Some(workspace.to_string());
     }
 
     /// Get the default workspace
+    ///
+    /// `[auth] default_workspace` is the primary source; `[defaults] workspace`
+    /// remains as a legacy fallback. Remove the fallback (and the
+    /// `defaults.workspace` field) in the first release after 1.0.
     pub fn default_workspace(&self) -> Option<&str> {
-        self.defaults.workspace.as_deref()
+        self.auth
+            .default_workspace
+            .as_deref()
+            .or(self.defaults.workspace.as_deref())
     }
 
     /// Clear authentication settings (for logout)
     pub fn clear_auth(&mut self) {
         self.auth.username = None;
         self.auth.default_workspace = None;
+        self.defaults.workspace = None;
     }
 }
 
@@ -269,6 +264,43 @@ mod tests {
         let serialized = toml::to_string(&config).unwrap();
         let deserialized: Config = toml::from_str(&serialized).unwrap();
         assert_eq!(config.display.color, deserialized.display.color);
+    }
+
+    #[test]
+    fn test_default_workspace_prefers_auth_field() {
+        let mut config = Config::default();
+        config.auth.default_workspace = Some("auth-ws".to_string());
+        config.defaults.workspace = Some("legacy-ws".to_string());
+        assert_eq!(config.default_workspace(), Some("auth-ws"));
+    }
+
+    #[test]
+    fn test_default_workspace_falls_back_to_defaults_field() {
+        let mut config = Config::default();
+        config.defaults.workspace = Some("legacy-ws".to_string());
+        assert_eq!(config.default_workspace(), Some("legacy-ws"));
+    }
+
+    #[test]
+    fn test_set_default_workspace_writes_auth_field() {
+        let mut config = Config::default();
+        config.set_default_workspace("my-ws");
+        assert_eq!(config.auth.default_workspace.as_deref(), Some("my-ws"));
+        assert!(config.defaults.workspace.is_none());
+        assert_eq!(config.default_workspace(), Some("my-ws"));
+    }
+
+    #[test]
+    fn test_clear_auth_clears_default_workspace() {
+        let mut config = Config::default();
+        config.set_username("someone");
+        config.auth.default_workspace = Some("auth-ws".to_string());
+        config.defaults.workspace = Some("legacy-ws".to_string());
+
+        config.clear_auth();
+
+        assert!(config.username().is_none());
+        assert!(config.default_workspace().is_none());
     }
 
     #[test]

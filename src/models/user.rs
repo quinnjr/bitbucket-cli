@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -30,6 +31,8 @@ pub struct Workspace {
     pub name: String,
     #[serde(rename = "type")]
     pub workspace_type: String,
+    pub is_private: Option<bool>,
+    pub created_on: Option<DateTime<Utc>>,
     pub links: Option<WorkspaceLinks>,
 }
 

@@ -136,3 +136,75 @@ impl Default for AuthManager {
         Self::new().expect("Failed to create auth manager")
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn oauth_credential(expires_at: Option<i64>) -> Credential {
+        Credential::OAuth {
+            access_token: "test-access-token".to_string(),
+            refresh_token: None,
+            expires_at,
+            client_id: None,
+            client_secret: None,
+        }
+    }
+
+    #[test]
+    fn oauth_auth_header_is_bearer_token() {
+        let credential = oauth_credential(None);
+        assert_eq!(credential.auth_header(), "Bearer test-access-token");
+    }
+
+    #[test]
+    fn api_key_auth_header_is_basic_base64() {
+        let credential = Credential::ApiKey {
+            username: "alice".to_string(),
+            api_key: "s3cret-key".to_string(),
+        };
+        let expected = format!(
+            "Basic {}",
+            base64::engine::general_purpose::STANDARD.encode("alice:s3cret-key")
+        );
+        assert_eq!(credential.auth_header(), expected);
+    }
+
+    #[test]
+    fn api_key_never_needs_refresh() {
+        let credential = Credential::ApiKey {
+            username: "alice".to_string(),
+            api_key: "s3cret-key".to_string(),
+        };
+        assert!(!credential.needs_refresh());
+    }
+
+    #[test]
+    fn oauth_without_expiry_never_needs_refresh() {
+        let credential = oauth_credential(None);
+        assert!(!credential.needs_refresh());
+    }
+
+    #[test]
+    fn oauth_expiring_beyond_five_minutes_does_not_need_refresh() {
+        // 10 minutes from now: well past the 5-minute refresh window
+        let expires_at = chrono::Utc::now().timestamp() + 600;
+        let credential = oauth_credential(Some(expires_at));
+        assert!(!credential.needs_refresh());
+    }
+
+    #[test]
+    fn oauth_expiring_within_five_minutes_needs_refresh() {
+        // 1 minute from now: inside the 5-minute refresh window
+        let expires_at = chrono::Utc::now().timestamp() + 60;
+        let credential = oauth_credential(Some(expires_at));
+        assert!(credential.needs_refresh());
+    }
+
+    #[test]
+    fn oauth_already_expired_needs_refresh() {
+        let expires_at = chrono::Utc::now().timestamp() - 600;
+        let credential = oauth_credential(Some(expires_at));
+        assert!(credential.needs_refresh());
+    }
+}

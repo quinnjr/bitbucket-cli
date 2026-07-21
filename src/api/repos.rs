@@ -1,7 +1,7 @@
 use anyhow::Result;
 
 use super::BitbucketClient;
-use crate::models::{CreateRepositoryRequest, Paginated, Repository};
+use crate::models::{CreateRepositoryRequest, Paginated, Repository, UpdateRepositoryRequest};
 
 impl BitbucketClient {
     /// List repositories for a workspace
@@ -38,6 +38,17 @@ impl BitbucketClient {
         workspace: &str,
         repo_slug: &str,
         request: &CreateRepositoryRequest,
+    ) -> Result<Repository> {
+        let path = format!("/repositories/{}/{}", workspace, repo_slug);
+        self.put(&path, request).await
+    }
+
+    /// Update settings on an existing repository
+    pub async fn update_repository(
+        &self,
+        workspace: &str,
+        repo_slug: &str,
+        request: &UpdateRepositoryRequest,
     ) -> Result<Repository> {
         let path = format!("/repositories/{}/{}", workspace, repo_slug);
         self.put(&path, request).await

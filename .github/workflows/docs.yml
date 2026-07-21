@@ -40,7 +40,7 @@ jobs:
 
       - name: Build
         working-directory: ./docs
-        run: pnpm run build
+        run: pnpm run build -- --base-href=/bitbucket-cli/
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

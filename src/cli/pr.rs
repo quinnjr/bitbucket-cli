@@ -3,10 +3,11 @@ use clap::{Subcommand, ValueEnum};
 use colored::Colorize;
 use tabled::{Table, Tabled};
 
+use super::parse_repo;
 use crate::api::BitbucketClient;
 use crate::models::{
     BranchInfo, CreatePullRequestRequest, MergePullRequestRequest, MergeStrategy,
-    PullRequestBranchRef, PullRequestState,
+    PullRequestBranchRef, PullRequestComment, PullRequestState,
 };
 
 #[derive(Subcommand)]
@@ -537,16 +538,17 @@ impl PrCommands {
                 let (workspace, repo_slug) = parse_repo(&repo)?;
                 let client = BitbucketClient::from_stored().await?;
 
-                let comments = client.list_pr_comments(&workspace, &repo_slug, id).await?;
+                let comments = client
+                    .list_recent_pr_comments(&workspace, &repo_slug, id, limit as usize)
+                    .await?;
 
-                let mut values: Vec<_> = comments.values.into_iter().take(limit as usize).collect();
-
-                if values.is_empty() {
+                if comments.is_empty() {
                     println!("No comments found");
                     return Ok(());
                 }
 
-                values.sort_by_key(|c| c.created_on);
+                let hit_limit = comments.len() >= limit as usize;
+                let values = newest_comments_chronological(comments, limit as usize);
 
                 let rows: Vec<CommentRow> = values
                     .iter()
@@ -565,6 +567,13 @@ impl PrCommands {
 
                 let table = Table::new(rows).to_string();
                 println!("{}", table);
+
+                if hit_limit {
+                    println!(
+                        "Showing the {} most recent comments. Use --limit to see more.",
+                        limit
+                    );
+                }
 
                 Ok(())
             }
@@ -692,22 +701,85 @@ impl PrCommands {
     }
 }
 
-fn parse_repo(repo: &str) -> Result<(String, String)> {
-    let parts: Vec<&str> = repo.split('/').collect();
-    if parts.len() != 2 {
-        anyhow::bail!(
-            "Invalid repository format. Expected 'workspace/repo-slug', got '{}'",
-            repo
-        );
-    }
-    Ok((parts[0].to_string(), parts[1].to_string()))
-}
-
 fn format_state(state: &PullRequestState) -> String {
     match state {
         PullRequestState::Open => "OPEN".green().to_string(),
         PullRequestState::Merged => "MERGED".purple().to_string(),
         PullRequestState::Declined => "DECLINED".red().to_string(),
         PullRequestState::Superseded => "SUPERSEDED".yellow().to_string(),
+    }
+}
+
+/// Keep the newest `limit` comments and return them in chronological
+/// (oldest -> newest) display order.
+fn newest_comments_chronological(
+    mut comments: Vec<PullRequestComment>,
+    limit: usize,
+) -> Vec<PullRequestComment> {
+    comments.sort_by_key(|c| std::cmp::Reverse(c.created_on));
+    comments.truncate(limit);
+    comments.reverse();
+    comments
+}
+
+#[cfg(test)]
+mod tests {
+    use super::newest_comments_chronological;
+    use crate::models::{CommentContent, PullRequestComment, User};
+    use chrono::{DateTime, Utc};
+
+    fn ts(s: &str) -> DateTime<Utc> {
+        s.parse().unwrap()
+    }
+
+    fn comment(id: u64, created_on: DateTime<Utc>) -> PullRequestComment {
+        PullRequestComment {
+            id,
+            content: CommentContent {
+                raw: format!("comment {}", id),
+                markup: None,
+                html: None,
+            },
+            user: User {
+                uuid: "{user-uuid}".to_string(),
+                username: None,
+                display_name: "Test User".to_string(),
+                account_id: None,
+                user_type: "user".to_string(),
+                links: None,
+            },
+            created_on,
+            updated_on: None,
+            deleted: None,
+            inline: None,
+            parent: None,
+            links: None,
+        }
+    }
+
+    #[test]
+    fn keeps_the_newest_comments_in_ascending_display_order() {
+        let t1 = ts("2024-01-01T00:00:00Z");
+        let t2 = ts("2024-01-02T00:00:00Z");
+        let t3 = ts("2024-01-03T00:00:00Z");
+        let input = vec![comment(3, t3), comment(1, t1), comment(2, t2)];
+
+        let result = newest_comments_chronological(input, 2);
+
+        let times: Vec<DateTime<Utc>> = result.iter().map(|c| c.created_on).collect();
+        assert_eq!(times, vec![t2, t3]);
+    }
+
+    #[test]
+    fn limit_larger_than_input_returns_all_in_ascending_order() {
+        let t1 = ts("2024-01-01T00:00:00Z");
+        let t2 = ts("2024-01-02T00:00:00Z");
+        let t3 = ts("2024-01-03T00:00:00Z");
+        let input = vec![comment(3, t3), comment(1, t1), comment(2, t2)];
+
+        let result = newest_comments_chronological(input, 10);
+
+        let times: Vec<DateTime<Utc>> = result.iter().map(|c| c.created_on).collect();
+        assert_eq!(times, vec![t1, t2, t3]);
     }
 }

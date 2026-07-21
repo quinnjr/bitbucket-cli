@@ -4,6 +4,7 @@ use colored::Colorize;
 use indicatif::{ProgressBar, ProgressStyle};
 use tabled::{Table, Tabled};
 
+use super::parse_repo;
 use crate::api::BitbucketClient;
 use crate::models::{PipelineResultName, PipelineStateName, TriggerPipelineRequest};
 
@@ -215,10 +216,11 @@ impl PipelineCommands {
                                 Ok(log) => {
                                     if !log.is_empty() {
                                         println!();
-                                        for line in log.lines().take(50) {
+                                        let (shown, truncated) = take_log_lines(&log, 50);
+                                        for line in shown {
                                             println!("    {}", line.dimmed());
                                         }
-                                        if log.lines().count() > 50 {
+                                        if truncated {
                                             println!("    {} ... (truncated)", "".dimmed());
                                         }
                                         println!();
@@ -347,17 +349,6 @@ impl PipelineCommands {
     }
 }
 
-fn parse_repo(repo: &str) -> Result<(String, String)> {
-    let parts: Vec<&str> = repo.split('/').collect();
-    if parts.len() != 2 {
-        anyhow::bail!(
-            "Invalid repository format. Expected 'workspace/repo-slug', got '{}'",
-            repo
-        );
-    }
-    Ok((parts[0].to_string(), parts[1].to_string()))
-}
-
 pub(crate) fn format_status(
     state: &PipelineStateName,
     result: Option<&PipelineResultName>,
@@ -390,5 +381,47 @@ pub(crate) fn format_duration(seconds: u64) -> String {
         format!("{}m {}s", seconds / 60, seconds % 60)
     } else {
         format!("{}h {}m", seconds / 3600, (seconds % 3600) / 60)
+    }
+}
+
+/// Take at most `max` display lines from a log in a single pass, reporting
+/// whether any lines were left out.
+fn take_log_lines(log: &str, max: usize) -> (Vec<&str>, bool) {
+    let mut lines = log.lines();
+    let shown: Vec<&str> = lines.by_ref().take(max).collect();
+    let truncated = lines.next().is_some();
+    (shown, truncated)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::take_log_lines;
+
+    fn log_with_lines(n: usize) -> String {
+        (0..n).map(|i| format!("line {}\n", i)).collect()
+    }
+
+    #[test]
+    fn under_the_limit_is_not_truncated() {
+        let log = log_with_lines(49);
+        let (shown, truncated) = take_log_lines(&log, 50);
+        assert_eq!(shown.len(), 49);
+        assert!(!truncated);
+    }
+
+    #[test]
+    fn exactly_the_limit_is_not_truncated() {
+        let log = log_with_lines(50);
+        let (shown, truncated) = take_log_lines(&log, 50);
+        assert_eq!(shown.len(), 50);
+        assert!(!truncated);
+    }
+
+    #[test]
+    fn one_over_the_limit_is_truncated() {
+        let log = log_with_lines(51);
+        let (shown, truncated) = take_log_lines(&log, 50);
+        assert_eq!(shown.len(), 50);
+        assert!(truncated);
     }
 }

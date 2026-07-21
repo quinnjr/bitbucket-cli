@@ -105,6 +105,22 @@ scripts/             # Build and utility scripts
 docs/                # Documentation site
 ```
 
+## Versioning
+
+`Cargo.toml` is the single source of truth for the version. Several other files hardcode it (the Windows MSI config, the Arch and Alpine package files, and two docs pages) and must never be edited by hand.
+
+To bump the version:
+
+```bash
+# Edit the version in Cargo.toml, then:
+./scripts/bump-version.sh
+
+# Or do both in one step:
+./scripts/bump-version.sh 0.5.0
+```
+
+The script propagates the Cargo.toml version to every derived location and fails loudly if any expected version string has moved or gone missing.
+
 ## Building Packages
 
 If you're working on packaging or release automation, see [docs/PACKAGING.md](docs/PACKAGING.md) for detailed information on building distribution packages for various platforms.

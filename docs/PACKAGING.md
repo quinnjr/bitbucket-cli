@@ -8,7 +8,7 @@ Bitbucket CLI supports the following package formats:
 
 - **Debian/Ubuntu**: `.deb` packages
 - **Red Hat/Fedora/CentOS**: `.rpm` packages
-- **Arch Linux**: `.pkg.tar.zst` packages
+- **Arch Linux**: PKGBUILD built with `makepkg`; releases also ship a generic `bitbucket-cli-v<version>-x86_64-linux.tar.zst` binary tarball
 - **Alpine Linux**: Static musl binaries in `.tar.gz`
 - **Windows**: `.msi` installers
 
@@ -89,15 +89,22 @@ Configuration is in `Cargo.toml` under `[package.metadata.generate-rpm]`.
 
 #### Arch Linux Package
 
+The `arch` target of `scripts/build-packages.sh` produces a generic Linux binary
+tarball named `bitbucket-cli-<version>-x86_64-linux.tar.zst` (not a pacman
+package):
+
 ```bash
 # Build binary
 cargo build --release
 
-# Create compressed archive
+# Create compressed archive (what scripts/build-packages.sh arch does)
 cd target/release
-tar -I 'zstd -19' -cf ../bitbucket-cli-x86_64.pkg.tar.zst bitbucket
+tar -I 'zstd -19' -cf ../bitbucket-cli-<version>-x86_64-linux.tar.zst bitbucket
+```
 
-# Or use PKGBUILD
+A real Arch package is built from the PKGBUILD:
+
+```bash
 cd packaging/arch
 makepkg -si
 ```
@@ -129,6 +136,11 @@ cargo build --release --target x86_64-pc-windows-msvc
 # Build installer
 wix build -arch x64 -o bitbucket-cli.msi packaging/windows/main.wxs
 ```
+
+The MSI references `packaging/windows/icon.ico` as the Add/Remove Programs
+product icon. The committed file is generated deterministically by
+`scripts/generate-icon.py`; run it with `--check` to verify the bytes, or
+without arguments to regenerate after changing the design.
 
 ## Package Contents
 
@@ -198,7 +210,15 @@ Dependencies:
 
 Install with:
 ```bash
-sudo pacman -U bitbucket-cli-*.pkg.tar.zst
+# Recommended: download the PKGBUILD from releases and build the package
+wget https://github.com/pegasusheavy/bitbucket-cli/releases/latest/download/PKGBUILD
+makepkg -si
+
+# Or download the binary tarball and extract it manually
+# (it is a plain zstd tarball, not a pacman package — pacman -U does not work on it)
+wget https://github.com/pegasusheavy/bitbucket-cli/releases/latest/download/bitbucket-cli-vX.X.X-x86_64-linux.tar.zst
+tar --zstd -xf bitbucket-cli-vX.X.X-x86_64-linux.tar.zst
+sudo mv bitbucket /usr/local/bin/
 ```
 
 ### Alpine Linux
@@ -252,8 +272,9 @@ sudo rpm -e bitbucket-cli
 
 ### Arch Linux
 ```bash
-# Install
-sudo pacman -U bitbucket-cli-*.pkg.tar.zst
+# Install (build the package from the PKGBUILD)
+cd packaging/arch
+makepkg -si
 
 # Test
 bitbucket --version

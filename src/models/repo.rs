@@ -55,7 +55,7 @@ pub struct CloneLink {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Branch {
     pub name: String,
-    #[serde(rename = "type")]
+    #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
     pub branch_type: Option<String>,
 }
 
@@ -93,6 +93,44 @@ pub struct ProjectKey {
     pub key: String,
 }
 
+/// Partial update for an existing repository. Unset fields are omitted from
+/// the request body so the corresponding settings are left untouched.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct UpdateRepositoryRequest {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub is_private: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub language: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fork_policy: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub has_issues: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub has_wiki: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub project: Option<ProjectKey>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mainbranch: Option<Branch>,
+}
+
+impl UpdateRepositoryRequest {
+    pub fn is_empty(&self) -> bool {
+        self.name.is_none()
+            && self.description.is_none()
+            && self.is_private.is_none()
+            && self.language.is_none()
+            && self.fork_policy.is_none()
+            && self.has_issues.is_none()
+            && self.has_wiki.is_none()
+            && self.project.is_none()
+            && self.mainbranch.is_none()
+    }
+}
+
 impl Default for CreateRepositoryRequest {
     fn default() -> Self {
         Self {
@@ -106,5 +144,54 @@ impl Default for CreateRepositoryRequest {
             has_issues: Some(true),
             has_wiki: Some(false),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Branch, ProjectKey, UpdateRepositoryRequest};
+
+    #[test]
+    fn update_request_omits_unset_fields() {
+        let request = UpdateRepositoryRequest {
+            description: Some("new description".to_string()),
+            ..Default::default()
+        };
+
+        let json = serde_json::to_value(&request).unwrap();
+        assert_eq!(
+            json,
+            serde_json::json!({ "description": "new description" })
+        );
+    }
+
+    #[test]
+    fn update_request_mainbranch_serializes_without_null_type() {
+        let request = UpdateRepositoryRequest {
+            mainbranch: Some(Branch {
+                name: "develop".to_string(),
+                branch_type: None,
+            }),
+            ..Default::default()
+        };
+
+        let json = serde_json::to_value(&request).unwrap();
+        assert_eq!(
+            json,
+            serde_json::json!({ "mainbranch": { "name": "develop" } })
+        );
+    }
+
+    #[test]
+    fn update_request_is_empty() {
+        assert!(UpdateRepositoryRequest::default().is_empty());
+
+        let with_project = UpdateRepositoryRequest {
+            project: Some(ProjectKey {
+                key: "PROJ".to_string(),
+            }),
+            ..Default::default()
+        };
+        assert!(!with_project.is_empty());
     }
 }

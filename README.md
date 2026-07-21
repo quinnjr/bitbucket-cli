@@ -45,14 +45,14 @@ sudo dnf install bitbucket-cli.x86_64.rpm
 ### Arch Linux
 
 ```bash
-# Download the package from releases
-wget https://github.com/pegasusheavy/bitbucket-cli/releases/latest/download/bitbucket-cli-vX.X.X-x86_64.pkg.tar.zst
-sudo pacman -U bitbucket-cli-vX.X.X-x86_64.pkg.tar.zst
-
-# Or build from PKGBUILD
-git clone https://github.com/pegasusheavy/bitbucket-cli.git
-cd bitbucket-cli/packaging/arch
+# Recommended: download the PKGBUILD from releases and build the package
+wget https://github.com/pegasusheavy/bitbucket-cli/releases/latest/download/PKGBUILD
 makepkg -si
+
+# Or download the binary tarball and extract it manually
+wget https://github.com/pegasusheavy/bitbucket-cli/releases/latest/download/bitbucket-cli-vX.X.X-x86_64-linux.tar.zst
+tar --zstd -xf bitbucket-cli-vX.X.X-x86_64-linux.tar.zst
+sudo mv bitbucket /usr/local/bin/
 ```
 
 ### Alpine Linux
@@ -144,10 +144,11 @@ bitbucket tui --workspace myworkspace
 | Command | Description |
 |---------|-------------|
 | `bitbucket auth` | Manage authentication (login, logout, status) |
-| `bitbucket repo` | Manage repositories (list, view, clone, create, fork, delete) |
-| `bitbucket pr` | Manage pull requests (list, view, create, merge, approve, decline) |
+| `bitbucket repo` | Manage repositories (list, view, clone, create, update, move, fork, delete) |
+| `bitbucket pr` | Manage pull requests (list, view, create, merge, approve, decline, checkout, diff, comment, list-comments, view-comment, pipelines) |
 | `bitbucket issue` | Manage issues (list, view, create, comment, close, reopen) |
 | `bitbucket pipeline` | Manage pipelines (list, view, trigger, stop) |
+| `bitbucket workspace` | Manage workspaces (list) |
 | `bitbucket tui` | Launch interactive terminal UI |
 
 ## 🖥️ TUI Mode
@@ -162,25 +163,24 @@ bitbucket tui
 - `q` - Quit
 - `1-5` - Switch views (Dashboard, Repos, PRs, Issues, Pipelines)
 - `j/k` or `↑/↓` - Navigate
-- `Enter` - Select/Open
+- `Enter` - Select (opens the view on Dashboard)
 - `r` - Refresh
 
 ## ⚙️ Configuration
 
-Configuration is stored in `~/.config/bitbucket/config.toml`:
+Configuration is stored in `~/.config/bitbucket-cli/config.toml`:
 
 ```toml
 [auth]
 username = "your-username"
 default_workspace = "your-workspace"
 
-[defaults]
-branch = "main"
-
 [display]
 color = true
 pager = true
 ```
+
+`[defaults] workspace` is still read as a legacy fallback for the default workspace; `[auth] default_workspace` takes precedence.
 
 ## 📚 Documentation
 

@@ -3,15 +3,16 @@ use clap::Subcommand;
 use colored::Colorize;
 use tabled::{Table, Tabled};
 
+use super::parse_repo;
 use crate::api::BitbucketClient;
-use crate::models::CreateRepositoryRequest;
+use crate::models::{CreateRepositoryRequest, UpdateRepositoryRequest};
 
 #[derive(Subcommand)]
 pub enum RepoCommands {
     /// List repositories in a workspace
     List {
-        /// Workspace slug
-        workspace: String,
+        /// Workspace slug (defaults to --workspace or the configured default workspace)
+        workspace: Option<String>,
 
         /// Number of results per page
         #[arg(short, long, default_value = "25")]
@@ -40,11 +41,13 @@ pub enum RepoCommands {
 
     /// Create a new repository
     Create {
-        /// Workspace slug
+        /// Workspace slug, `workspace/name`, or just the repository name
+        /// when --workspace or a default workspace supplies the workspace
+        #[arg(value_name = "WORKSPACE_OR_NAME")]
         workspace: String,
 
-        /// Repository name
-        name: String,
+        /// Repository name (omit when the first argument already names the repository)
+        name: Option<String>,
 
         /// Repository description
         #[arg(short, long)]
@@ -61,6 +64,57 @@ pub enum RepoCommands {
         /// Fork policy: allow_forks, no_public_forks, no_forks (default: allow_forks when --public, no_public_forks otherwise)
         #[arg(long)]
         fork_policy: Option<String>,
+    },
+
+    /// Update repository settings
+    Update {
+        /// Repository in format workspace/repo-slug
+        repo: String,
+
+        /// New repository name (also changes the repository slug)
+        #[arg(long)]
+        name: Option<String>,
+
+        /// New description
+        #[arg(short, long)]
+        description: Option<String>,
+
+        /// Make repository private
+        #[arg(long, conflicts_with = "public")]
+        private: bool,
+
+        /// Make repository public
+        #[arg(long)]
+        public: bool,
+
+        /// Primary language
+        #[arg(short, long)]
+        language: Option<String>,
+
+        /// Fork policy: allow_forks, no_public_forks, no_forks
+        #[arg(long)]
+        fork_policy: Option<String>,
+
+        /// Enable or disable the issue tracker
+        #[arg(long, value_name = "true|false")]
+        issues: Option<bool>,
+
+        /// Enable or disable the wiki
+        #[arg(long, value_name = "true|false")]
+        wiki: Option<bool>,
+
+        /// Main branch name
+        #[arg(long)]
+        main_branch: Option<String>,
+    },
+
+    /// Move a repository to a different project in its workspace
+    Move {
+        /// Repository in format workspace/repo-slug
+        repo: String,
+
+        /// Destination project key
+        project: String,
     },
 
     /// Fork a repository
@@ -104,6 +158,7 @@ impl RepoCommands {
     pub async fn run(self) -> Result<()> {
         match self {
             RepoCommands::List { workspace, limit } => {
+                let workspace = super::resolve_workspace(workspace)?;
                 let client = BitbucketClient::from_stored().await?;
                 let repos = client
                     .list_repositories(&workspace, None, Some(limit))
@@ -270,6 +325,11 @@ impl RepoCommands {
                 project,
                 fork_policy,
             } => {
+                let (workspace, name) = match name {
+                    Some(name) => (workspace, name),
+                    None => parse_repo(&workspace)?,
+                };
+
                 let client = BitbucketClient::from_stored().await?;
 
                 let slug = name.to_lowercase().replace(' ', "-");
@@ -307,6 +367,103 @@ impl RepoCommands {
                         println!("{} {}", "URL:".dimmed(), html.href);
                     }
                 }
+
+                Ok(())
+            }
+
+            RepoCommands::Update {
+                repo,
+                name,
+                description,
+                private,
+                public,
+                language,
+                fork_policy,
+                issues,
+                wiki,
+                main_branch,
+            } => {
+                let (workspace, repo_slug) = parse_repo(&repo)?;
+
+                let request = UpdateRepositoryRequest {
+                    name,
+                    description,
+                    is_private: if private {
+                        Some(true)
+                    } else if public {
+                        Some(false)
+                    } else {
+                        None
+                    },
+                    language,
+                    fork_policy,
+                    has_issues: issues,
+                    has_wiki: wiki,
+                    project: None,
+                    mainbranch: main_branch.map(|name| crate::models::Branch {
+                        name,
+                        branch_type: None,
+                    }),
+                };
+
+                if request.is_empty() {
+                    anyhow::bail!(
+                        "Nothing to update. Pass at least one option, e.g. --description or --private."
+                    );
+                }
+
+                let client = BitbucketClient::from_stored().await?;
+                let updated = client
+                    .update_repository(&workspace, &repo_slug, &request)
+                    .await?;
+
+                println!(
+                    "{} Updated repository {}",
+                    "✓".green(),
+                    updated.full_name.cyan()
+                );
+
+                if let Some(new_slug) = &updated.slug {
+                    if new_slug != &repo_slug {
+                        println!(
+                            "{} Repository slug changed: {} → {}",
+                            "ℹ".blue(),
+                            repo_slug,
+                            new_slug.cyan()
+                        );
+                    }
+                }
+
+                Ok(())
+            }
+
+            RepoCommands::Move { repo, project } => {
+                let (workspace, repo_slug) = parse_repo(&repo)?;
+
+                let request = UpdateRepositoryRequest {
+                    project: Some(crate::models::ProjectKey {
+                        key: project.clone(),
+                    }),
+                    ..Default::default()
+                };
+
+                let client = BitbucketClient::from_stored().await?;
+                let updated = client
+                    .update_repository(&workspace, &repo_slug, &request)
+                    .await?;
+
+                let project_label = updated
+                    .project
+                    .as_ref()
+                    .map(|p| format!("{} ({})", p.name, p.key))
+                    .unwrap_or(project);
+
+                println!(
+                    "{} Moved {} to project {}",
+                    "✓".green(),
+                    updated.full_name.cyan(),
+                    project_label.cyan()
+                );
 
                 Ok(())
             }
@@ -361,15 +518,4 @@ impl RepoCommands {
             }
         }
     }
-}
-
-fn parse_repo(repo: &str) -> Result<(String, String)> {
-    let parts: Vec<&str> = repo.split('/').collect();
-    if parts.len() != 2 {
-        anyhow::bail!(
-            "Invalid repository format. Expected 'workspace/repo-slug', got '{}'",
-            repo
-        );
-    }
-    Ok((parts[0].to_string(), parts[1].to_string()))
 }

@@ -20,17 +20,6 @@ function Build-MSI {
     Write-Host "Building release binary..." -ForegroundColor Yellow
     cargo build --release --target x86_64-pc-windows-msvc
     
-    # Ensure icon exists (placeholder)
-    $IconDir = "packaging\windows"
-    if (!(Test-Path $IconDir)) {
-        New-Item -ItemType Directory -Force -Path $IconDir | Out-Null
-    }
-    
-    if (!(Test-Path "$IconDir\icon.ico")) {
-        Write-Host "Warning: No icon.ico found. Creating placeholder..." -ForegroundColor Yellow
-        Set-Content -Path "$IconDir\icon.ico" -Value "" -NoNewline
-    }
-    
     # Build MSI
     Write-Host "Building MSI package..." -ForegroundColor Yellow
     wix build -arch x64 -o bitbucket-cli.msi packaging\windows\main.wxs

@@ -37,7 +37,7 @@ import { faGithub } from '@fortawesome/free-brands-svg-icons';
         <!-- Right side actions -->
         <div class="flex items-center gap-4">
           <a
-            href="https://github.com/PegasusHeavyIndustries/bitbucket-cli"
+            href="https://github.com/pegasusheavy/bitbucket-cli"
             target="_blank"
             class="hidden sm:flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-[var(--color-neutral-500)] hover:text-[var(--color-neutral-800)] transition-colors"
           >
@@ -46,7 +46,7 @@ import { faGithub } from '@fortawesome/free-brands-svg-icons';
           </a>
 
           <span class="hidden sm:inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-[var(--color-bitbucket-blue-50)] text-[var(--color-bitbucket-blue)]">
-            v0.1.0
+            v0.4.0
           </span>
         </div>
       </div>

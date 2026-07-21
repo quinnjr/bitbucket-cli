@@ -19,6 +19,8 @@ impl BitbucketClient {
     pub fn new(credential: Credential) -> Result<Self> {
         let client = Client::builder()
             .user_agent("bitbucket-cli")
+            .timeout(std::time::Duration::from_secs(30))
+            .connect_timeout(std::time::Duration::from_secs(10))
             .build()
             .context("Failed to create HTTP client")?;
 
@@ -50,7 +52,10 @@ impl BitbucketClient {
                 let flow = OAuthFlow::new(client_id.to_string(), client_secret.to_string());
                 match flow.refresh_token(&auth_manager, refresh_token).await {
                     Ok(refreshed) => refreshed,
-                    Err(_) => credential, // Fall back to existing credential if refresh fails
+                    Err(e) => {
+                        eprintln!("Warning: token refresh failed: {}", e);
+                        credential // Fall back to existing credential if refresh fails
+                    }
                 }
             } else {
                 credential
@@ -101,6 +106,43 @@ impl BitbucketClient {
             .context("Request failed")?;
 
         self.handle_response(response).await
+    }
+
+    /// Make a GET request to an absolute URL (e.g. a pagination `next` link)
+    pub(crate) async fn get_absolute<T: DeserializeOwned>(&self, url: &str) -> Result<T> {
+        let response = self
+            .client
+            .get(url)
+            .header("Authorization", self.credential.auth_header())
+            .send()
+            .await
+            .context("Request failed")?;
+
+        self.handle_response(response).await
+    }
+
+    /// Make a GET request that returns the raw response body as text
+    pub(crate) async fn get_text(&self, path: &str, accept: Option<&str>) -> Result<String> {
+        let mut request = self
+            .client
+            .get(self.url(path))
+            .header("Authorization", self.credential.auth_header());
+
+        if let Some(accept) = accept {
+            request = request.header("Accept", accept);
+        }
+
+        let response = request.send().await.context("Request failed")?;
+        let status = response.status();
+
+        if status.is_success() {
+            response
+                .text()
+                .await
+                .context("Failed to read response body")
+        } else {
+            self.handle_error(status, response).await
+        }
     }
 
     /// Make a POST request with JSON body

@@ -25,20 +25,16 @@ import { CommonModule } from '@angular/common';
         <h2 class="text-xl font-semibold text-[var(--color-neutral-800)] mb-4">Configuration File</h2>
         <div class="bg-white rounded-xl border border-[var(--color-neutral-30)] p-6">
           <p class="text-[var(--color-neutral-600)] mb-4">
-            Configuration is stored in <code class="bg-[var(--color-neutral-20)] px-2 py-0.5 rounded">~/.config/bitbucket/config.toml</code>
+            Configuration is stored in <code class="bg-[var(--color-neutral-20)] px-2 py-0.5 rounded">~/.config/bitbucket-cli/config.toml</code>
           </p>
           <div class="bg-[var(--color-neutral-900)] rounded-lg p-4">
             <pre class="text-sm text-[var(--color-neutral-100)] font-mono overflow-x-auto"><code>[auth]
 username = "your-username"
 default_workspace = "your-workspace"
 
-[defaults]
-branch = "main"
-
 [display]
 color = true
-pager = true
-date_format = "%Y-%m-%d %H:%M"</code></pre>
+pager = true</code></pre>
           </div>
         </div>
       </section>
@@ -79,11 +75,10 @@ date_format = "%Y-%m-%d %H:%M"</code></pre>
 })
 export class ConfigurationComponent {
   options = [
-    { key: 'auth.username', description: 'Your Bitbucket username', default: 'none' },
+    { key: 'auth.username', description: 'Your Bitbucket username (set automatically on login)', default: 'none' },
     { key: 'auth.default_workspace', description: 'Default workspace for commands', default: 'none' },
-    { key: 'defaults.branch', description: 'Default branch for operations', default: 'main' },
+    { key: 'defaults.workspace', description: 'Legacy fallback for the default workspace; auth.default_workspace takes precedence', default: 'none' },
     { key: 'display.color', description: 'Enable colored output', default: 'true' },
     { key: 'display.pager', description: 'Use pager for long output', default: 'true' },
-    { key: 'display.date_format', description: 'Date format string', default: '%Y-%m-%d %H:%M' },
   ];
 }

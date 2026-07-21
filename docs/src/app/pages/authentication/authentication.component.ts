@@ -29,15 +29,16 @@ import { CommonModule } from '@angular/common';
           <div class="p-6 border-b border-[var(--color-neutral-30)]">
             <div class="flex items-start gap-4">
               <div class="w-12 h-12 bg-[var(--color-success-light)] rounded-lg flex items-center justify-center flex-shrink-0">
-                <span class="text-2xl">🔑</span>
+                <span class="text-2xl">🌐</span>
               </div>
               <div>
                 <h3 class="font-semibold text-[var(--color-neutral-800)] flex items-center gap-2">
-                  App Password
+                  OAuth 2.0
                   <span class="px-2 py-0.5 bg-[var(--color-success-light)] text-[var(--color-success)] text-xs rounded font-medium">Recommended</span>
                 </h3>
                 <p class="text-sm text-[var(--color-neutral-400)] mt-1">
-                  Simple and secure. Create an app password in your Bitbucket settings and use it to authenticate.
+                  Browser-based sign-in using an OAuth consumer you create once. Tokens are refreshed
+                  automatically, so you stay signed in.
                 </p>
               </div>
             </div>
@@ -45,44 +46,53 @@ import { CommonModule } from '@angular/common';
           <div class="p-6">
             <div class="flex items-start gap-4">
               <div class="w-12 h-12 bg-[var(--color-bitbucket-blue-50)] rounded-lg flex items-center justify-center flex-shrink-0">
-                <span class="text-2xl">🌐</span>
+                <span class="text-2xl">🔑</span>
               </div>
               <div>
-                <h3 class="font-semibold text-[var(--color-neutral-800)]">OAuth 2.0</h3>
+                <h3 class="font-semibold text-[var(--color-neutral-800)]">API Key (HTTP Access Token)</h3>
                 <p class="text-sm text-[var(--color-neutral-400)] mt-1">
-                  Browser-based authentication flow. Opens your browser to authorize access.
+                  Token-based authentication for automation, CI, and headless environments.
                 </p>
               </div>
             </div>
           </div>
         </div>
+        <p class="text-sm text-[var(--color-neutral-400)] mt-4">
+          Note: Bitbucket app passwords are <strong>not</strong> supported — they have been deprecated by Atlassian.
+        </p>
       </section>
 
-      <!-- App Password Setup -->
+      <!-- OAuth Setup -->
       <section class="mb-12">
-        <h2 class="text-xl font-semibold text-[var(--color-neutral-800)] mb-4">Setting up App Password</h2>
+        <h2 class="text-xl font-semibold text-[var(--color-neutral-800)] mb-4">Setting up OAuth 2.0</h2>
 
         <div class="space-y-4">
           <!-- Step 1 -->
           <div class="bg-white rounded-xl border border-[var(--color-neutral-30)] p-6">
             <h3 class="font-semibold text-[var(--color-neutral-800)] mb-3 flex items-center gap-2">
               <span class="w-6 h-6 bg-[var(--color-bitbucket-blue)] text-white rounded-full flex items-center justify-center text-xs">1</span>
-              Create an App Password
+              Create an OAuth Consumer
             </h3>
             <ol class="space-y-2 text-sm text-[var(--color-neutral-600)] ml-8">
-              <li>Go to <a href="https://bitbucket.org/account/settings/app-passwords/" target="_blank" class="text-[var(--color-bitbucket-blue)] hover:underline">Bitbucket App Passwords</a></li>
-              <li>Click <strong>"Create app password"</strong></li>
-              <li>Give it a label (e.g., "CLI Access")</li>
+              <li>Go to <code class="bg-[var(--color-neutral-20)] px-1.5 py-0.5 rounded text-xs">https://bitbucket.org/[workspace]/workspace/settings/oauth-consumers/new</code></li>
+              <li>Set the callback URL to <strong>one</strong> of these (pick any available port):
+                <ul class="mt-2 ml-4 space-y-1">
+                  <li>• <code class="bg-[var(--color-neutral-20)] px-1.5 py-0.5 rounded text-xs">http://127.0.0.1:8080/callback</code></li>
+                  <li>• <code class="bg-[var(--color-neutral-20)] px-1.5 py-0.5 rounded text-xs">http://127.0.0.1:3000/callback</code></li>
+                  <li>• <code class="bg-[var(--color-neutral-20)] px-1.5 py-0.5 rounded text-xs">http://127.0.0.1:8888/callback</code></li>
+                  <li>• <code class="bg-[var(--color-neutral-20)] px-1.5 py-0.5 rounded text-xs">http://127.0.0.1:9000/callback</code></li>
+                </ul>
+              </li>
               <li>Select the required permissions:
                 <ul class="mt-2 ml-4 space-y-1">
                   <li>• <code class="bg-[var(--color-neutral-20)] px-1.5 py-0.5 rounded text-xs">Account: Read</code></li>
-                  <li>• <code class="bg-[var(--color-neutral-20)] px-1.5 py-0.5 rounded text-xs">Repositories: Read, Write, Admin</code></li>
+                  <li>• <code class="bg-[var(--color-neutral-20)] px-1.5 py-0.5 rounded text-xs">Repositories: Read</code></li>
                   <li>• <code class="bg-[var(--color-neutral-20)] px-1.5 py-0.5 rounded text-xs">Pull requests: Read, Write</code></li>
                   <li>• <code class="bg-[var(--color-neutral-20)] px-1.5 py-0.5 rounded text-xs">Issues: Read, Write</code></li>
                   <li>• <code class="bg-[var(--color-neutral-20)] px-1.5 py-0.5 rounded text-xs">Pipelines: Read, Write</code></li>
                 </ul>
               </li>
-              <li>Click <strong>"Create"</strong> and copy the generated password</li>
+              <li>Save the consumer and copy the <strong>Key</strong> (Client ID) and <strong>Secret</strong></li>
             </ol>
           </div>
 
@@ -93,13 +103,18 @@ import { CommonModule } from '@angular/common';
               Authenticate with the CLI
             </h3>
             <p class="text-sm text-[var(--color-neutral-600)] mb-4 ml-8">
-              Run the login command and enter your credentials:
+              Run the login command and complete the sign-in in your browser:
             </p>
             <div class="bg-[var(--color-neutral-900)] rounded-lg p-4 ml-8">
-              <code class="text-[var(--color-bitbucket-blue-light)] font-mono">bitbucket auth login</code>
+              <code class="text-[var(--color-bitbucket-blue-light)] font-mono">bitbucket auth login --oauth</code>
             </div>
             <p class="text-sm text-[var(--color-neutral-400)] mt-4 ml-8">
-              You'll be prompted to enter your Bitbucket username and the app password you created.
+              You'll be prompted for the consumer's Client ID and Secret the first time. You can also
+              pass them with <code class="bg-[var(--color-neutral-20)] px-1.5 py-0.5 rounded text-xs">--client-id</code> and
+              <code class="bg-[var(--color-neutral-20)] px-1.5 py-0.5 rounded text-xs">--client-secret</code>, or set the
+              <code class="bg-[var(--color-neutral-20)] px-1.5 py-0.5 rounded text-xs">BITBUCKET_CLIENT_ID</code> and
+              <code class="bg-[var(--color-neutral-20)] px-1.5 py-0.5 rounded text-xs">BITBUCKET_CLIENT_SECRET</code> environment
+              variables. Access tokens are refreshed automatically when they expire.
             </p>
           </div>
 
@@ -119,6 +134,32 @@ import { CommonModule } from '@angular/common';
         </div>
       </section>
 
+      <!-- API Key Setup -->
+      <section class="mb-12">
+        <h2 class="text-xl font-semibold text-[var(--color-neutral-800)] mb-4">Using an API Key</h2>
+        <div class="bg-white rounded-xl border border-[var(--color-neutral-30)] p-6">
+          <p class="text-sm text-[var(--color-neutral-600)] mb-4">
+            For automation, CI, and headless environments, authenticate with an API key
+            (HTTP access token) instead:
+          </p>
+          <div class="bg-[var(--color-neutral-900)] rounded-lg p-4 mb-4">
+            <code class="text-[var(--color-bitbucket-blue-light)] font-mono">bitbucket auth login --api-key</code>
+          </div>
+          <p class="text-sm text-[var(--color-neutral-400)] mb-4">
+            You'll be prompted for your Atlassian account email (or Bitbucket username) and the token.
+            For non-interactive use, pass both on the command line:
+          </p>
+          <div class="bg-[var(--color-neutral-900)] rounded-lg p-4">
+            <code class="text-[var(--color-bitbucket-blue-light)] font-mono">bitbucket auth login --email you&#64;example.com --token &lt;API_TOKEN&gt;</code>
+          </div>
+          <p class="text-sm text-[var(--color-neutral-400)] mt-4">
+            The <code class="bg-[var(--color-neutral-20)] px-1.5 py-0.5 rounded text-xs">BITBUCKET_EMAIL</code> and
+            <code class="bg-[var(--color-neutral-20)] px-1.5 py-0.5 rounded text-xs">BITBUCKET_API_TOKEN</code> environment
+            variables are also supported.
+          </p>
+        </div>
+      </section>
+
       <!-- Security Note -->
       <section class="mb-12">
         <div class="bg-[var(--color-bitbucket-blue-50)] border border-[var(--color-bitbucket-blue-100)] rounded-xl p-6">
@@ -131,8 +172,11 @@ import { CommonModule } from '@angular/common';
             <div>
               <h3 class="font-semibold text-[var(--color-bitbucket-blue-dark)]">Secure Storage</h3>
               <p class="text-sm text-[var(--color-bitbucket-blue-dark)] mt-1">
-                Your credentials are stored securely in your system's keyring (Keychain on macOS,
-                Secret Service on Linux, Credential Manager on Windows). They are never stored in plain text.
+                Your credentials are stored in your system's keyring when one is available (Keychain on macOS,
+                Secret Service on Linux, Credential Manager on Windows). On systems without a keyring, they
+                fall back to a restricted-permission file at
+                <code class="bg-[var(--color-bitbucket-blue-100)] px-1.5 py-0.5 rounded text-xs">~/.config/bitbucket/credentials.json</code>
+                (mode 0600 on Unix).
               </p>
             </div>
           </div>

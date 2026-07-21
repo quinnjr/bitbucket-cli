@@ -4,7 +4,7 @@ import { CommonModule } from '@angular/common';
 import { FontAwesomeModule } from '@fortawesome/angular-fontawesome';
 import { IconDefinition } from '@fortawesome/fontawesome-svg-core';
 import {
-  faFolder, faCodeBranch, faBug, faBolt, faTerminal, faShieldAlt,
+  faFolder, faCodeBranch, faBug, faBolt, faBuilding, faTerminal, faShieldAlt,
   faArrowRight, faCopy, faChevronRight, faKey
 } from '@fortawesome/free-solid-svg-icons';
 import { faGithub, faBitbucket } from '@fortawesome/free-brands-svg-icons';
@@ -17,6 +17,7 @@ interface Feature {
 
 interface Command {
   name: string;
+  path: string;
   icon: IconDefinition;
   description: string;
 }
@@ -47,7 +48,7 @@ interface Command {
             <fa-icon [icon]="faArrowRight"></fa-icon>
           </a>
           <a
-            href="https://github.com/PegasusHeavyIndustries/bitbucket-cli"
+            href="https://github.com/pegasusheavy/bitbucket-cli"
             target="_blank"
             class="inline-flex items-center gap-2 px-6 py-3 bg-white text-[var(--color-neutral-700)] font-medium rounded-lg border border-[var(--color-neutral-40)] hover:bg-[var(--color-neutral-20)] transition-colors"
           >
@@ -96,7 +97,7 @@ interface Command {
         <div class="bg-white rounded-xl border border-[var(--color-neutral-30)] overflow-hidden">
           @for (cmd of commands; track cmd.name) {
             <a
-              [routerLink]="'/commands/' + cmd.name"
+              [routerLink]="cmd.path"
               class="flex items-center gap-4 p-4 hover:bg-[var(--color-neutral-10)] transition-colors border-b border-[var(--color-neutral-30)] last:border-b-0"
             >
               <div class="w-10 h-10 bg-[var(--color-bitbucket-blue-50)] rounded-lg flex items-center justify-center flex-shrink-0">
@@ -166,16 +167,18 @@ export class HomeComponent {
     {
       icon: faShieldAlt,
       title: 'Secure Auth',
-      description: 'Support for app passwords and OAuth with secure keyring storage.'
+      description: 'Support for OAuth 2.0 and API keys with secure keyring storage.'
     }
   ];
 
   commands: Command[] = [
-    { name: 'auth', icon: faKey, description: 'Manage authentication with Bitbucket' },
-    { name: 'repo', icon: faFolder, description: 'Manage repositories' },
-    { name: 'pr', icon: faCodeBranch, description: 'Manage pull requests' },
-    { name: 'issue', icon: faBug, description: 'Manage issues' },
-    { name: 'pipeline', icon: faBolt, description: 'Manage pipelines' },
+    { name: 'auth', path: '/commands/auth', icon: faKey, description: 'Manage authentication with Bitbucket' },
+    { name: 'repo', path: '/commands/repo', icon: faFolder, description: 'Manage repositories' },
+    { name: 'pr', path: '/commands/pr', icon: faCodeBranch, description: 'Manage pull requests' },
+    { name: 'issue', path: '/commands/issue', icon: faBug, description: 'Manage issues' },
+    { name: 'pipeline', path: '/commands/pipeline', icon: faBolt, description: 'Manage pipelines' },
+    { name: 'workspace', path: '/commands/workspace', icon: faBuilding, description: 'Manage workspaces' },
+    { name: 'tui', path: '/tui', icon: faTerminal, description: 'Launch the interactive terminal UI' },
   ];
 
   copyToClipboard(text: string) {
