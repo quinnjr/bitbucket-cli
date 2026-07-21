@@ -187,6 +187,10 @@ impl BitbucketClient {
             .post(self.url(path))
             .header("Authorization", self.credential.auth_header())
             .multipart(form)
+            // Uploads carry arbitrarily large bodies; the client-wide 30s
+            // timeout is tuned for JSON calls and would doom large transfers,
+            // so override it per-request (connect_timeout still applies).
+            .timeout(std::time::Duration::from_secs(900))
             .send()
             .await
             .context("Request failed")?;

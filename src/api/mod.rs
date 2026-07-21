@@ -7,4 +7,4 @@ pub mod repos;
 pub mod workspaces;
 
 pub use client::*;
-pub use downloads::{download_url, upload_name_for};
+pub use downloads::download_url;

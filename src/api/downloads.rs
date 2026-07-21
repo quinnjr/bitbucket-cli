@@ -1,10 +1,10 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 use reqwest::multipart::{Form, Part};
 
 use super::BitbucketClient;
-use crate::models::{Download, Paginated};
+use crate::models::Download;
 
 impl BitbucketClient {
     /// Upload one or more files to a repository's downloads area.
@@ -19,6 +19,9 @@ impl BitbucketClient {
         let mut form = Form::new();
 
         for (upload_name, path) in files {
+            // Bodies are buffered in memory: streaming would require the
+            // reqwest `stream` feature + tokio-util; acceptable for CLI-sized
+            // artifacts.
             let bytes = std::fs::read(path)
                 .with_context(|| format!("Failed to read file '{}'", path.display()))?;
             let part = Part::bytes(bytes).file_name(upload_name.clone());
@@ -30,14 +33,11 @@ impl BitbucketClient {
         self.post_multipart(&path, form).await
     }
 
-    /// List the artifacts in a repository's downloads area.
-    pub async fn list_downloads(
-        &self,
-        workspace: &str,
-        repo_slug: &str,
-    ) -> Result<Paginated<Download>> {
+    /// List all artifacts in a repository's downloads area, following
+    /// pagination `next` links until every page has been fetched.
+    pub async fn list_downloads(&self, workspace: &str, repo_slug: &str) -> Result<Vec<Download>> {
         let path = format!("/repositories/{}/{}/downloads", workspace, repo_slug);
-        self.get(&path).await
+        self.get_all_pages::<Download>(&path).await
     }
 
     /// Delete a single artifact from a repository's downloads area.
@@ -68,15 +68,6 @@ pub fn download_url(workspace: &str, repo_slug: &str, name: &str) -> String {
         repo_slug,
         urlencode_segment(name)
     )
-}
-
-/// Extract the file name (final path component) from a path, for use as the
-/// uploaded artifact name.
-pub fn upload_name_for(path: &Path) -> Result<String> {
-    path.file_name()
-        .and_then(|n| n.to_str())
-        .map(|s| s.to_string())
-        .with_context(|| format!("Could not determine a file name for '{}'", path.display()))
 }
 
 /// Percent-encode the characters that are unsafe in a single URL path segment.
@@ -112,12 +103,6 @@ mod tests {
             download_url("acme", "widgets", "my shot (1).png"),
             "https://bitbucket.org/acme/widgets/downloads/my%20shot%20%281%29.png"
         );
-    }
-
-    #[test]
-    fn upload_name_takes_final_component() {
-        let p = PathBuf::from("/tmp/screenshots/login.png");
-        assert_eq!(upload_name_for(&p).unwrap(), "login.png");
     }
 
     #[test]

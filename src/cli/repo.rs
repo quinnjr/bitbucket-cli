@@ -1,4 +1,5 @@
-use std::path::PathBuf;
+use std::collections::HashSet;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use clap::Subcommand;
@@ -6,7 +7,7 @@ use colored::Colorize;
 use tabled::{Table, Tabled};
 
 use super::parse_repo;
-use crate::api::{BitbucketClient, download_url, upload_name_for};
+use crate::api::{BitbucketClient, download_url};
 use crate::models::{CreateRepositoryRequest, UpdateRepositoryRequest};
 
 #[derive(Subcommand)]
@@ -365,10 +366,7 @@ impl RepoCommands {
                 project,
                 fork_policy,
             } => {
-                let (workspace, name) = match name {
-                    Some(name) => (workspace, name),
-                    None => parse_repo(&workspace)?,
-                };
+                let (workspace, name) = super::resolve_create_target(workspace, name)?;
 
                 let client = BitbucketClient::from_stored().await?;
 
@@ -425,26 +423,17 @@ impl RepoCommands {
             } => {
                 let (workspace, repo_slug) = parse_repo(&repo)?;
 
-                let request = UpdateRepositoryRequest {
+                let request = build_update_request(UpdateFlags {
                     name,
                     description,
-                    is_private: if private {
-                        Some(true)
-                    } else if public {
-                        Some(false)
-                    } else {
-                        None
-                    },
+                    private,
+                    public,
                     language,
                     fork_policy,
-                    has_issues: issues,
-                    has_wiki: wiki,
-                    project: None,
-                    mainbranch: main_branch.map(|name| crate::models::Branch {
-                        name,
-                        branch_type: None,
-                    }),
-                };
+                    issues,
+                    wiki,
+                    main_branch,
+                });
 
                 if request.is_empty() {
                     anyhow::bail!(
@@ -533,20 +522,13 @@ impl RepoCommands {
             RepoCommands::Delete { repo, yes } => {
                 let (workspace, repo_slug) = parse_repo(&repo)?;
 
-                if !yes {
-                    use dialoguer::Confirm;
-                    let confirmed = Confirm::new()
-                        .with_prompt(format!(
-                            "Are you sure you want to delete {}? This cannot be undone!",
-                            repo.red()
-                        ))
-                        .default(false)
-                        .interact()?;
-
-                    if !confirmed {
-                        println!("Aborted");
-                        return Ok(());
-                    }
+                if !yes
+                    && !confirm_or_abort(format!(
+                        "Are you sure you want to delete {}? This cannot be undone!",
+                        repo.red()
+                    ))?
+                {
+                    return Ok(());
                 }
 
                 let client = BitbucketClient::from_stored().await?;
@@ -585,6 +567,18 @@ impl DownloadCommands {
                     .map(|p| Ok((upload_name_for(p)?, p.clone())))
                     .collect::<Result<_>>()?;
 
+                // Bitbucket keys downloads by filename, so two inputs with the
+                // same basename would silently overwrite each other server-side.
+                let mut seen = HashSet::new();
+                for (name, _) in &uploads {
+                    if !seen.insert(name.as_str()) {
+                        anyhow::bail!(
+                            "Duplicate upload name '{}': multiple input files share this filename; Bitbucket stores downloads by filename, so one would overwrite the other",
+                            name
+                        );
+                    }
+                }
+
                 let client = BitbucketClient::from_stored().await?;
                 client
                     .upload_downloads(&workspace, &repo_slug, &uploads)
@@ -606,13 +600,12 @@ impl DownloadCommands {
                 let client = BitbucketClient::from_stored().await?;
                 let downloads = client.list_downloads(&workspace, &repo_slug).await?;
 
-                if downloads.values.is_empty() {
+                if downloads.is_empty() {
                     println!("No downloads found in {}", repo);
                     return Ok(());
                 }
 
                 let rows: Vec<DownloadRow> = downloads
-                    .values
                     .iter()
                     .map(|d| DownloadRow {
                         name: d.name.clone(),
@@ -632,23 +625,22 @@ impl DownloadCommands {
             DownloadCommands::Delete { repo, name, yes } => {
                 let (workspace, repo_slug) = parse_repo(&repo)?;
 
-                if !yes {
-                    use dialoguer::Confirm;
-                    let confirmed = Confirm::new()
-                        .with_prompt(format!("Delete download {} from {}?", name.red(), repo))
-                        .default(false)
-                        .interact()?;
-
-                    if !confirmed {
-                        println!("Aborted");
-                        return Ok(());
-                    }
+                if !yes
+                    && !confirm_or_abort(format!("Delete download {} from {}?", name.red(), repo))?
+                {
+                    return Ok(());
                 }
 
                 let client = BitbucketClient::from_stored().await?;
                 client
                     .delete_download(&workspace, &repo_slug, &name)
-                    .await?;
+                    .await
+                    .with_context(|| {
+                        format!(
+                            "Failed to delete download '{}' from {}/{}",
+                            name, workspace, repo_slug
+                        )
+                    })?;
 
                 println!("{} Deleted download {}", "✓".green(), name);
 
@@ -656,6 +648,70 @@ impl DownloadCommands {
             }
         }
     }
+}
+
+/// The `repo update` command-line flags, grouped for translation into an
+/// `UpdateRepositoryRequest`.
+#[derive(Default)]
+struct UpdateFlags {
+    name: Option<String>,
+    description: Option<String>,
+    private: bool,
+    public: bool,
+    language: Option<String>,
+    fork_policy: Option<String>,
+    issues: Option<bool>,
+    wiki: Option<bool>,
+    main_branch: Option<String>,
+}
+
+/// Build the update request for `repo update` from its command-line flags.
+fn build_update_request(flags: UpdateFlags) -> UpdateRepositoryRequest {
+    UpdateRepositoryRequest {
+        name: flags.name,
+        description: flags.description,
+        is_private: if flags.private {
+            Some(true)
+        } else if flags.public {
+            Some(false)
+        } else {
+            None
+        },
+        language: flags.language,
+        fork_policy: flags.fork_policy,
+        has_issues: flags.issues,
+        has_wiki: flags.wiki,
+        project: None,
+        mainbranch: flags.main_branch.map(|name| crate::models::Branch {
+            name,
+            branch_type: None,
+        }),
+    }
+}
+
+/// Ask the user to confirm a destructive action; on decline, print "Aborted"
+/// and return Ok(false).
+fn confirm_or_abort(prompt: String) -> Result<bool> {
+    use dialoguer::Confirm;
+    let confirmed = Confirm::new()
+        .with_prompt(prompt)
+        .default(false)
+        .interact()?;
+
+    if !confirmed {
+        println!("Aborted");
+    }
+
+    Ok(confirmed)
+}
+
+/// Extract the file name (final path component) from a path, for use as the
+/// uploaded artifact name.
+fn upload_name_for(path: &Path) -> Result<String> {
+    path.file_name()
+        .and_then(|n| n.to_str())
+        .map(|s| s.to_string())
+        .with_context(|| format!("Could not determine a file name for '{}'", path.display()))
 }
 
 /// Format a byte count into a short human-readable string.
@@ -691,5 +747,45 @@ mod tests {
         assert_eq!(format_size(1536), "1.5 KB");
         assert_eq!(format_size(1024 * 1024), "1.0 MB");
         assert_eq!(format_size(5 * 1024 * 1024 * 1024), "5.0 GB");
+    }
+
+    #[test]
+    fn upload_name_takes_final_component() {
+        let p = PathBuf::from("/tmp/screenshots/login.png");
+        assert_eq!(upload_name_for(&p).unwrap(), "login.png");
+    }
+
+    fn empty_update_request(private: bool, public: bool) -> UpdateRepositoryRequest {
+        build_update_request(UpdateFlags {
+            private,
+            public,
+            ..Default::default()
+        })
+    }
+
+    #[test]
+    fn build_update_request_maps_private_flag() {
+        assert_eq!(empty_update_request(true, false).is_private, Some(true));
+    }
+
+    #[test]
+    fn build_update_request_maps_public_flag() {
+        assert_eq!(empty_update_request(false, true).is_private, Some(false));
+    }
+
+    #[test]
+    fn build_update_request_leaves_privacy_unset_without_flags() {
+        assert_eq!(empty_update_request(false, false).is_private, None);
+    }
+
+    #[test]
+    fn build_update_request_maps_main_branch() {
+        let request = build_update_request(UpdateFlags {
+            main_branch: Some("develop".to_string()),
+            ..Default::default()
+        });
+        let branch = request.mainbranch.expect("mainbranch should be set");
+        assert_eq!(branch.name, "develop");
+        assert_eq!(branch.branch_type, None);
     }
 }

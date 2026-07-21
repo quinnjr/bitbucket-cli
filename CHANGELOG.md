@@ -18,7 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   are now rejected instead of being passed through.
 - Library API: the `Cli::repo` field has been removed; the
   `tui::views::{dashboard,repos,prs,issues}` modules have been removed;
-  `models::Workspace` gained the `is_private` and `created_on` fields.
+  `models::Workspace` gained the `is_private` and `created_on` fields;
+  `BitbucketClient::list_pr_comments` has been replaced by
+  `list_recent_pr_comments` (bounded, newest-first).
 - The Arch release asset has been renamed from
   `bitbucket-cli-<version>-x86_64.pkg.tar.zst` to
   `bitbucket-cli-<version>-x86_64-linux.tar.zst`. It is a plain binary tarball,
