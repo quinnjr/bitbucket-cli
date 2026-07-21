@@ -104,6 +104,9 @@ export class PrCommandComponent {
     { name: 'checkout', description: 'Checkout a PR branch locally' },
     { name: 'diff', description: 'View the diff for a pull request' },
     { name: 'comment', description: 'Add a comment to a pull request' },
+    { name: 'list-comments', description: 'List comments on a pull request' },
+    { name: 'view-comment', description: 'View a specific comment on a pull request' },
+    { name: 'pipelines', description: "List pipelines for the PR's head commit" },
   ];
 
   examples = [
@@ -135,7 +138,7 @@ export class PrCommandComponent {
   ];
 
   options = [
-    { flag: '--state <STATE>', description: 'Filter by state (open, merged, declined)' },
+    { flag: '--state <STATE>', description: 'Filter by state (open, merged, declined, superseded)' },
     { flag: '--limit <N>', description: 'Number of results to show (default: 25)' },
     { flag: '--web', description: 'Open in browser instead of showing in terminal' },
     { flag: '--strategy <STRATEGY>', description: 'Merge strategy (merge-commit, squash, fast-forward)' },

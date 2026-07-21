@@ -1,8 +1,3 @@
-pub mod dashboard;
-pub mod issues;
-pub mod prs;
-pub mod repos;
-
 /// Available views in the TUI
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum View {

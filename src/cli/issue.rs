@@ -3,6 +3,7 @@ use clap::{Subcommand, ValueEnum};
 use colored::Colorize;
 use tabled::{Table, Tabled};
 
+use super::parse_repo;
 use crate::api::BitbucketClient;
 use crate::models::{
     CreateIssueRequest, IssueContentRequest, IssueKind, IssuePriority, IssueState,
@@ -380,17 +381,6 @@ impl IssueCommands {
             }
         }
     }
-}
-
-fn parse_repo(repo: &str) -> Result<(String, String)> {
-    let parts: Vec<&str> = repo.split('/').collect();
-    if parts.len() != 2 {
-        anyhow::bail!(
-            "Invalid repository format. Expected 'workspace/repo-slug', got '{}'",
-            repo
-        );
-    }
-    Ok((parts[0].to_string(), parts[1].to_string()))
 }
 
 fn format_state(state: &IssueState) -> String {

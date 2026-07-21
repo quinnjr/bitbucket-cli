@@ -149,17 +149,44 @@ impl BitbucketClient {
     }
 
     /// List comments on a pull request
-    pub async fn list_pr_comments(
+    /// List the most recent comments on a pull request, newest first.
+    ///
+    /// Requests pages sorted by `-created_on` and stops following the
+    /// pagination `next` links as soon as `max_items` comments have been
+    /// collected (or the pages are exhausted), so large PRs don't require
+    /// downloading their entire comment history.
+    pub async fn list_recent_pr_comments(
         &self,
         workspace: &str,
         repo_slug: &str,
         pr_id: u64,
-    ) -> Result<Paginated<PullRequestComment>> {
+        max_items: usize,
+    ) -> Result<Vec<PullRequestComment>> {
         let path = format!(
             "/repositories/{}/{}/pullrequests/{}/comments",
             workspace, repo_slug, pr_id
         );
-        self.get(&path).await
+
+        let mut comments: Vec<PullRequestComment> = Vec::new();
+        let mut page: Paginated<PullRequestComment> = self
+            .get_with_query(&path, &[("sort", "-created_on"), ("pagelen", "100")])
+            .await?;
+
+        loop {
+            comments.extend(page.values);
+
+            if comments.len() >= max_items {
+                comments.truncate(max_items);
+                break;
+            }
+
+            match page.next {
+                Some(next_url) => page = self.get_absolute(&next_url).await?,
+                None => break,
+            }
+        }
+
+        Ok(comments)
     }
 
     /// Get a specific comment on a pull request
@@ -215,24 +242,11 @@ impl BitbucketClient {
         repo_slug: &str,
         pr_id: u64,
     ) -> Result<String> {
-        use reqwest::header::ACCEPT;
-
         let path = format!(
             "/repositories/{}/{}/pullrequests/{}/diff",
             workspace, repo_slug, pr_id
         );
 
-        let response = reqwest::Client::new()
-            .get(self.url(&path))
-            .header("Authorization", self.auth_header())
-            .header(ACCEPT, "text/plain")
-            .send()
-            .await?;
-
-        if response.status().is_success() {
-            Ok(response.text().await?)
-        } else {
-            anyhow::bail!("Failed to get diff: {}", response.status())
-        }
+        self.get_text(&path, Some("text/plain")).await
     }
 }

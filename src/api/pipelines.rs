@@ -111,17 +111,7 @@ impl BitbucketClient {
             workspace, repo_slug, pipeline_uuid, step_uuid
         );
 
-        let response = reqwest::Client::new()
-            .get(self.url(&path))
-            .header("Authorization", self.auth_header())
-            .send()
-            .await?;
-
-        if response.status().is_success() {
-            Ok(response.text().await?)
-        } else {
-            anyhow::bail!("Failed to get step log: {}", response.status())
-        }
+        self.get_text(&path, None).await
     }
 
     /// List pipelines whose target commit matches `commit_hash`, newest first.
@@ -164,17 +154,57 @@ impl BitbucketClient {
         repo_slug: &str,
         build_number: u64,
     ) -> Result<Pipeline> {
-        // Search for the pipeline with the given build number
-        let pipelines = self
-            .list_pipelines(workspace, repo_slug, Some(1), Some(100))
-            .await?;
+        // Search for the pipeline with the given build number, newest first,
+        // scanning at most 50 pages of 100 pipelines each.
+        find_pipeline_by_build_number(
+            |page| self.list_pipelines(workspace, repo_slug, Some(page), Some(100)),
+            build_number,
+            50,
+        )
+        .await
+    }
+}
 
-        pipelines
+/// Walk pages of pipelines, newest first, looking for a matching build number.
+///
+/// Fetches pages `1..=max_pages` via `fetch_page` and returns as soon as a
+/// pipeline with `build_number` is found. Stops early when a page has no
+/// `next` link; errors if the page cap is reached without a match so a bogus
+/// build number can't trigger an unbounded page walk.
+async fn find_pipeline_by_build_number<F, Fut>(
+    mut fetch_page: F,
+    build_number: u64,
+    max_pages: u32,
+) -> Result<Pipeline>
+where
+    F: FnMut(u32) -> Fut,
+    Fut: std::future::Future<Output = Result<Paginated<Pipeline>>>,
+{
+    let mut pipelines_seen: usize = 0;
+
+    for page in 1..=max_pages {
+        let pipelines = fetch_page(page).await?;
+        let has_next = pipelines.next.is_some();
+        pipelines_seen += pipelines.values.len();
+
+        if let Some(pipeline) = pipelines
             .values
             .into_iter()
             .find(|p| p.build_number == build_number)
-            .ok_or_else(|| anyhow::anyhow!("Pipeline #{} not found", build_number))
+        {
+            return Ok(pipeline);
+        }
+
+        if !has_next {
+            return Err(anyhow::anyhow!("Pipeline #{} not found", build_number));
+        }
     }
+
+    Err(anyhow::anyhow!(
+        "Pipeline #{} not found (searched the {} most recent pipelines)",
+        build_number,
+        pipelines_seen
+    ))
 }
 
 /// Compare two git commit hashes that may differ in length.
@@ -189,7 +219,108 @@ fn commit_hashes_match(a: &str, b: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::commit_hashes_match;
+    use std::cell::Cell;
+    use std::future::{Ready, ready};
+
+    use chrono::Utc;
+
+    use super::{commit_hashes_match, find_pipeline_by_build_number};
+    use crate::models::{Paginated, Pipeline, PipelineState, PipelineStateName, PipelineTarget};
+
+    fn pipeline(build_number: u64) -> Pipeline {
+        Pipeline {
+            uuid: format!("{{pipeline-{}}}", build_number),
+            build_number,
+            creator: None,
+            repository: None,
+            target: PipelineTarget {
+                target_type: "pipeline_ref_target".to_string(),
+                ref_type: None,
+                ref_name: None,
+                selector: None,
+                commit: None,
+            },
+            trigger: None,
+            state: PipelineState {
+                name: PipelineStateName::Completed,
+                state_type: "pipeline_state_completed".to_string(),
+                result: None,
+                stage: None,
+            },
+            created_on: Utc::now(),
+            completed_on: None,
+            build_seconds_used: None,
+            links: None,
+        }
+    }
+
+    fn page(values: Vec<Pipeline>, has_next: bool) -> Paginated<Pipeline> {
+        Paginated {
+            size: None,
+            page: None,
+            pagelen: None,
+            next: has_next.then(|| "https://api.bitbucket.org/next".to_string()),
+            previous: None,
+            values,
+        }
+    }
+
+    type PageFuture = Ready<anyhow::Result<Paginated<Pipeline>>>;
+
+    #[tokio::test]
+    async fn finds_pipeline_on_second_page_with_exactly_two_fetches() {
+        let calls = Cell::new(0u32);
+        let fetch = |page_number: u32| -> PageFuture {
+            calls.set(calls.get() + 1);
+            ready(Ok(match page_number {
+                1 => page(vec![pipeline(100), pipeline(99)], true),
+                2 => page(vec![pipeline(98), pipeline(42)], true),
+                other => panic!("unexpected page fetch: {}", other),
+            }))
+        };
+
+        let found = find_pipeline_by_build_number(fetch, 42, 50)
+            .await
+            .expect("pipeline should be found on page 2");
+
+        assert_eq!(found.build_number, 42);
+        assert_eq!(calls.get(), 2);
+    }
+
+    #[tokio::test]
+    async fn stops_after_one_fetch_when_pages_are_exhausted() {
+        let calls = Cell::new(0u32);
+        let fetch = |_page_number: u32| -> PageFuture {
+            calls.set(calls.get() + 1);
+            ready(Ok(page(vec![pipeline(100), pipeline(99)], false)))
+        };
+
+        let err = find_pipeline_by_build_number(fetch, 42, 50)
+            .await
+            .expect_err("pipeline should not be found");
+
+        assert_eq!(err.to_string(), "Pipeline #42 not found");
+        assert_eq!(calls.get(), 1);
+    }
+
+    #[tokio::test]
+    async fn enforces_page_cap_when_next_is_always_present() {
+        let calls = Cell::new(0u32);
+        let fetch = |_page_number: u32| -> PageFuture {
+            calls.set(calls.get() + 1);
+            ready(Ok(page(vec![pipeline(100), pipeline(99)], true)))
+        };
+
+        let err = find_pipeline_by_build_number(fetch, 42, 3)
+            .await
+            .expect_err("search should stop at the page cap");
+
+        assert_eq!(
+            err.to_string(),
+            "Pipeline #42 not found (searched the 6 most recent pipelines)"
+        );
+        assert_eq!(calls.get(), 3);
+    }
 
     #[test]
     fn exact_equality_matches() {

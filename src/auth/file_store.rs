@@ -11,6 +11,9 @@ pub struct FileStore {
 
 impl FileStore {
     pub fn new() -> Result<Self> {
+        // NOTE: legacy directory — config.toml lives under "bitbucket-cli"
+        // (config::settings::APP_NAME). Existing credential files keep this
+        // path until a migration consolidates the two directories.
         let config_dir = dirs::config_dir()
             .context("Could not determine config directory")?
             .join("bitbucket");

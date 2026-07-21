@@ -5,13 +5,15 @@ use crossterm::{
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use ratatui::{Terminal, backend::CrosstermBackend};
+use std::future::Future;
 use std::io;
+use tokio::task::JoinSet;
 
 use super::event::{Event, EventHandler};
 use super::ui;
 use super::views::{View, ViewState};
 use crate::api::BitbucketClient;
-use crate::models::{Issue, Pipeline, PullRequest, Repository};
+use crate::models::{Issue, Paginated, Pipeline, PullRequest, Repository};
 
 /// Application state
 pub struct App {
@@ -219,26 +221,122 @@ impl App {
         Ok(())
     }
 
+    /// Get repository slugs for the workspace, fetching them only when not already loaded
+    async fn workspace_repo_slugs(
+        &mut self,
+        client: &BitbucketClient,
+        workspace: &str,
+    ) -> Option<Vec<String>> {
+        if !self.repositories.is_empty() {
+            return Some(
+                self.repositories
+                    .iter()
+                    .map(|repo| repo.slug.clone().unwrap_or_else(|| repo.name.clone()))
+                    .collect(),
+            );
+        }
+        match client.list_repositories(workspace, None, Some(50)).await {
+            Ok(result) => Some(
+                result
+                    .values
+                    .into_iter()
+                    .map(|repo| repo.slug.unwrap_or(repo.name))
+                    .collect(),
+            ),
+            Err(e) => {
+                self.set_error(&format!("Failed to load repositories: {}", e));
+                None
+            }
+        }
+    }
+
+    /// Fetch paginated data from every repository in parallel.
+    ///
+    /// Spawns one request per repository slug and drains them, returning the
+    /// collected values along with the number of repositories whose request
+    /// failed (API error or task panic).
+    async fn fetch_from_all_repos<T, F, Fut>(
+        client: &BitbucketClient,
+        workspace: &str,
+        repo_slugs: Vec<String>,
+        fetch: F,
+    ) -> (Vec<T>, usize)
+    where
+        F: Fn(BitbucketClient, String, String) -> Fut + Clone + Send + 'static,
+        Fut: Future<Output = Result<Paginated<T>>> + Send + 'static,
+        T: Send + 'static,
+    {
+        let mut requests = JoinSet::new();
+        for repo_slug in repo_slugs {
+            let client = client.clone();
+            let workspace = workspace.to_string();
+            let fetch = fetch.clone();
+            requests.spawn(async move { fetch(client, workspace, repo_slug).await });
+        }
+
+        let mut values = Vec::new();
+        let mut failures: usize = 0;
+        while let Some(result) = requests.join_next().await {
+            match result {
+                Ok(Ok(page)) => values.extend(page.values),
+                Ok(Err(_)) | Err(_) => failures += 1,
+            }
+        }
+        (values, failures)
+    }
+
+    /// Sort newest-first, restoring a deterministic order after the
+    /// concurrent fetch tasks complete in arbitrary order. Items without a
+    /// timestamp (`None`) sort last.
+    fn sort_newest_first<T, K: Ord>(items: &mut [T], key: impl Fn(&T) -> K) {
+        items.sort_by_key(|item| std::cmp::Reverse(key(item)));
+    }
+
+    /// Apply the shared post-fetch error rule: clear the error when at least
+    /// one repository succeeded (or there were no repositories to query), but
+    /// surface an error when every repository request failed.
+    fn apply_fetch_outcome(&mut self, repo_count: usize, failures: usize) {
+        if failures > 0 && failures == repo_count {
+            self.set_error(&format!(
+                "Failed to load data from all {} repositories",
+                failures
+            ));
+        } else {
+            self.clear_error();
+        }
+    }
+
     /// Load pull requests for the current workspace
     pub async fn load_pull_requests(&mut self) -> Result<()> {
-        if let (Some(client), Some(workspace)) = (&self.client, &self.workspace) {
+        if let (Some(client), Some(workspace)) = (self.client.clone(), self.workspace.clone()) {
             self.loading = true;
             self.pull_requests.clear();
 
             // Load PRs from all repositories
-            if let Ok(repos) = client.list_repositories(workspace, None, Some(50)).await {
-                for repo in repos.values {
-                    let repo_slug = repo.slug.as_deref().unwrap_or(&repo.name);
-                    if let Ok(prs) = client
-                        .list_pull_requests(workspace, repo_slug, None, None, Some(10))
-                        .await
-                    {
-                        self.pull_requests.extend(prs.values);
-                    }
+            let repo_slugs = match self.workspace_repo_slugs(&client, &workspace).await {
+                Some(slugs) => slugs,
+                None => {
+                    self.loading = false;
+                    return Ok(());
                 }
-            }
+            };
+            let repo_count = repo_slugs.len();
 
-            self.clear_error();
+            let (values, failures) = Self::fetch_from_all_repos(
+                &client,
+                &workspace,
+                repo_slugs,
+                |client, workspace, repo_slug| async move {
+                    client
+                        .list_pull_requests(&workspace, &repo_slug, None, None, Some(10))
+                        .await
+                },
+            )
+            .await;
+            self.pull_requests.extend(values);
+            Self::sort_newest_first(&mut self.pull_requests, |pr| pr.updated_on);
+
+            self.apply_fetch_outcome(repo_count, failures);
             self.loading = false;
         } else {
             self.set_error("No workspace configured");
@@ -248,24 +346,36 @@ impl App {
 
     /// Load issues for the current workspace
     pub async fn load_issues(&mut self) -> Result<()> {
-        if let (Some(client), Some(workspace)) = (&self.client, &self.workspace) {
+        if let (Some(client), Some(workspace)) = (self.client.clone(), self.workspace.clone()) {
             self.loading = true;
             self.issues.clear();
 
             // Load issues from all repositories
-            if let Ok(repos) = client.list_repositories(workspace, None, Some(50)).await {
-                for repo in repos.values {
-                    let repo_slug = repo.slug.as_deref().unwrap_or(&repo.name);
-                    if let Ok(issues) = client
-                        .list_issues(workspace, repo_slug, None, None, Some(10))
-                        .await
-                    {
-                        self.issues.extend(issues.values);
-                    }
+            let repo_slugs = match self.workspace_repo_slugs(&client, &workspace).await {
+                Some(slugs) => slugs,
+                None => {
+                    self.loading = false;
+                    return Ok(());
                 }
-            }
+            };
 
-            self.clear_error();
+            let repo_count = repo_slugs.len();
+
+            let (values, failures) = Self::fetch_from_all_repos(
+                &client,
+                &workspace,
+                repo_slugs,
+                |client, workspace, repo_slug| async move {
+                    client
+                        .list_issues(&workspace, &repo_slug, None, None, Some(10))
+                        .await
+                },
+            )
+            .await;
+            self.issues.extend(values);
+            Self::sort_newest_first(&mut self.issues, |issue| issue.created_on);
+
+            self.apply_fetch_outcome(repo_count, failures);
             self.loading = false;
         } else {
             self.set_error("No workspace configured");
@@ -275,24 +385,36 @@ impl App {
 
     /// Load pipelines for the current workspace
     pub async fn load_pipelines(&mut self) -> Result<()> {
-        if let (Some(client), Some(workspace)) = (&self.client, &self.workspace) {
+        if let (Some(client), Some(workspace)) = (self.client.clone(), self.workspace.clone()) {
             self.loading = true;
             self.pipelines.clear();
 
             // Load pipelines from all repositories
-            if let Ok(repos) = client.list_repositories(workspace, None, Some(50)).await {
-                for repo in repos.values {
-                    let repo_slug = repo.slug.as_deref().unwrap_or(&repo.name);
-                    if let Ok(pipelines) = client
-                        .list_pipelines(workspace, repo_slug, None, Some(10))
-                        .await
-                    {
-                        self.pipelines.extend(pipelines.values);
-                    }
+            let repo_slugs = match self.workspace_repo_slugs(&client, &workspace).await {
+                Some(slugs) => slugs,
+                None => {
+                    self.loading = false;
+                    return Ok(());
                 }
-            }
+            };
 
-            self.clear_error();
+            let repo_count = repo_slugs.len();
+
+            let (values, failures) = Self::fetch_from_all_repos(
+                &client,
+                &workspace,
+                repo_slugs,
+                |client, workspace, repo_slug| async move {
+                    client
+                        .list_pipelines(&workspace, &repo_slug, None, Some(10))
+                        .await
+                },
+            )
+            .await;
+            self.pipelines.extend(values);
+            Self::sort_newest_first(&mut self.pipelines, |pipeline| pipeline.created_on);
+
+            self.apply_fetch_outcome(repo_count, failures);
             self.loading = false;
         } else {
             self.set_error("No workspace configured");
@@ -417,4 +539,24 @@ pub async fn run_tui(workspace: Option<String>) -> Result<()> {
     terminal.show_cursor()?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::App;
+
+    #[test]
+    fn sort_newest_first_is_deterministic_regardless_of_arrival_order() {
+        // Simulates items arriving in arbitrary JoinSet completion order,
+        // keyed by Option timestamps as the real models are.
+        let mut items: Vec<(Option<i64>, &str)> = vec![
+            (Some(2), "middle"),
+            (None, "undated"),
+            (Some(3), "newest"),
+            (Some(1), "oldest"),
+        ];
+        App::sort_newest_first(&mut items, |item| item.0);
+        let order: Vec<&str> = items.iter().map(|item| item.1).collect();
+        assert_eq!(order, vec!["newest", "middle", "oldest", "undated"]);
+    }
 }

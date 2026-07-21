@@ -44,14 +44,39 @@ import { CommonModule } from '@angular/common';
         </div>
       </section>
 
+      <!-- Login Options -->
+      <section class="mb-12">
+        <h2 class="text-xl font-semibold text-[var(--color-neutral-800)] mb-4">Login Options</h2>
+        <div class="bg-white rounded-xl border border-[var(--color-neutral-30)] overflow-hidden">
+          @for (option of loginOptions; track option.flag) {
+            <div class="p-4 border-b border-[var(--color-neutral-30)] last:border-b-0">
+              <code class="text-[var(--color-bitbucket-blue)] font-mono font-medium">{{ option.flag }}</code>
+              <p class="text-sm text-[var(--color-neutral-400)] mt-1">{{ option.description }}</p>
+            </div>
+          }
+        </div>
+      </section>
+
       <!-- Examples -->
       <section>
         <h2 class="text-xl font-semibold text-[var(--color-neutral-800)] mb-4">Examples</h2>
         <div class="space-y-4">
           <div class="bg-white rounded-xl border border-[var(--color-neutral-30)] p-6">
-            <h3 class="font-medium text-[var(--color-neutral-800)] mb-2">Login with app password</h3>
+            <h3 class="font-medium text-[var(--color-neutral-800)] mb-2">Login with OAuth 2.0 (browser sign-in)</h3>
             <div class="bg-[var(--color-neutral-900)] rounded-lg p-4">
-              <code class="text-[var(--color-bitbucket-blue-light)] font-mono text-sm">bitbucket auth login</code>
+              <code class="text-[var(--color-bitbucket-blue-light)] font-mono text-sm">bitbucket auth login --oauth</code>
+            </div>
+          </div>
+          <div class="bg-white rounded-xl border border-[var(--color-neutral-30)] p-6">
+            <h3 class="font-medium text-[var(--color-neutral-800)] mb-2">Login with an API key (HTTP access token)</h3>
+            <div class="bg-[var(--color-neutral-900)] rounded-lg p-4">
+              <code class="text-[var(--color-bitbucket-blue-light)] font-mono text-sm">bitbucket auth login --api-key</code>
+            </div>
+          </div>
+          <div class="bg-white rounded-xl border border-[var(--color-neutral-30)] p-6">
+            <h3 class="font-medium text-[var(--color-neutral-800)] mb-2">Non-interactive login (automation/CI)</h3>
+            <div class="bg-[var(--color-neutral-900)] rounded-lg p-4">
+              <code class="text-[var(--color-bitbucket-blue-light)] font-mono text-sm">bitbucket auth login --email you&#64;example.com --token &lt;API_TOKEN&gt;</code>
             </div>
           </div>
           <div class="bg-white rounded-xl border border-[var(--color-neutral-30)] p-6">
@@ -73,8 +98,17 @@ import { CommonModule } from '@angular/common';
 })
 export class AuthCommandComponent {
   subcommands = [
-    { name: 'login', description: 'Authenticate with Bitbucket using app password' },
+    { name: 'login', description: 'Authenticate with Bitbucket (OAuth 2.0 or API key)' },
     { name: 'logout', description: 'Remove stored credentials' },
     { name: 'status', description: 'Show current authentication status' },
+  ];
+
+  loginOptions = [
+    { flag: '--oauth', description: 'Use OAuth 2.0 authentication (interactive browser sign-in)' },
+    { flag: '--api-key', description: 'Use API key authentication (HTTP access token; for automation/CI)' },
+    { flag: '--email <EMAIL>', description: 'Atlassian account email / Bitbucket username (for API key authentication; env: BITBUCKET_EMAIL)' },
+    { flag: '--token <TOKEN>', description: 'API key (HTTP access token; implies --api-key; env: BITBUCKET_API_TOKEN)' },
+    { flag: '--client-id <ID>', description: 'OAuth Client ID (for OAuth authentication; env: BITBUCKET_CLIENT_ID)' },
+    { flag: '--client-secret <SECRET>', description: 'OAuth Client Secret (for OAuth authentication; env: BITBUCKET_CLIENT_SECRET)' },
   ];
 }

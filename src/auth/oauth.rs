@@ -6,6 +6,7 @@ use oauth2::{
 };
 use std::io::{BufRead, BufReader, Write};
 use std::net::TcpListener;
+use std::time::Duration;
 
 use super::{AuthManager, Credential};
 
@@ -15,6 +16,8 @@ async fn async_http_client(
 ) -> Result<oauth2::HttpResponse, reqwest::Error> {
     let client = reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
+        .timeout(Duration::from_secs(30))
+        .connect_timeout(Duration::from_secs(10))
         .build()?;
 
     let mut request_builder = client
@@ -199,28 +202,20 @@ impl OAuthFlow {
                 continue;
             };
 
-            let mut code = None;
-            let mut state = None;
+            let params: Vec<(String, String)> = url
+                .query_pairs()
+                .map(|(key, value)| (key.into_owned(), value.into_owned()))
+                .collect();
 
-            for (key, value) in url.query_pairs() {
-                match key.as_ref() {
-                    "code" => code = Some(AuthorizationCode::new(value.to_string())),
-                    "state" => state = Some(CsrfToken::new(value.to_string())),
-                    _ => {}
-                }
-            }
-
-            // Verify CSRF token
-            if let Some(ref state) = state {
-                if state.secret() != expected_csrf.secret() {
+            match interpret_callback(&params, expected_csrf.secret()) {
+                CallbackOutcome::CsrfReject => {
                     let response = "HTTP/1.1 400 Bad Request\r\n\r\nCSRF token mismatch";
                     let _ = stream.write_all(response.as_bytes());
                     continue;
                 }
-            }
-
-            // Send success response
-            let response = r#"HTTP/1.1 200 OK
+                CallbackOutcome::Code(code) => {
+                    // Send success response
+                    let response = r#"HTTP/1.1 200 OK
 Content-Type: text/html
 
 <!DOCTYPE html>
@@ -231,10 +226,28 @@ Content-Type: text/html
 <p>You can close this window and return to the terminal.</p>
 </body>
 </html>"#;
-            let _ = stream.write_all(response.as_bytes());
+                    let _ = stream.write_all(response.as_bytes());
 
-            if let Some(code) = code {
-                return Ok(code);
+                    return Ok(AuthorizationCode::new(code));
+                }
+                CallbackOutcome::Failed(description) => {
+                    // No authorization code: the provider denied the request
+                    // or returned an error.
+                    let response = r#"HTTP/1.1 200 OK
+Content-Type: text/html
+
+<!DOCTYPE html>
+<html>
+<head><title>Bitbucket CLI</title></head>
+<body style="font-family: system-ui; text-align: center; padding: 50px;">
+<h1>❌ Authentication Failed</h1>
+<p>You can close this window and return to the terminal.</p>
+</body>
+</html>"#;
+                    let _ = stream.write_all(response.as_bytes());
+
+                    anyhow::bail!("Authentication failed: {}", description);
+                }
             }
         }
 
@@ -259,10 +272,12 @@ Content-Type: text/html
             .context("Failed to refresh token")?;
 
         let access_token = token_response.access_token().secret().to_string();
-        let new_refresh_token = token_response
-            .refresh_token()
-            .map(|t| t.secret().to_string())
-            .unwrap_or_else(|| refresh_token.to_string());
+        let new_refresh_token = merged_refresh_token(
+            token_response
+                .refresh_token()
+                .map(|t| t.secret().to_string()),
+            refresh_token,
+        );
         let expires_at = token_response
             .expires_in()
             .map(|d| chrono::Utc::now().timestamp() + d.as_secs() as i64);
@@ -278,5 +293,147 @@ Content-Type: text/html
         auth_manager.store_credentials(&credential)?;
 
         Ok(credential)
+    }
+}
+
+/// Use the refresh token from the token response if present, otherwise keep
+/// the old one (Bitbucket does not always return a new refresh token).
+fn merged_refresh_token(new: Option<String>, old: &str) -> String {
+    new.unwrap_or_else(|| old.to_string())
+}
+
+/// Result of interpreting the query parameters of an OAuth callback request.
+#[derive(Debug, PartialEq, Eq)]
+enum CallbackOutcome {
+    /// State matched and an authorization code was returned.
+    Code(String),
+    /// State was missing or did not match the expected CSRF token.
+    CsrfReject,
+    /// State matched but no authorization code was returned; carries the
+    /// failure description.
+    Failed(String),
+}
+
+/// Decide how to handle an OAuth callback based on its query parameters.
+///
+/// A callback with a missing state is rejected exactly like a mismatched
+/// one. When the state matches but no code is present, the failure
+/// description prefers `error_description`, then `error`, then a generic
+/// message.
+fn interpret_callback(params: &[(String, String)], expected_state: &str) -> CallbackOutcome {
+    let mut code = None;
+    let mut state = None;
+    let mut error = None;
+    let mut error_description = None;
+
+    for (key, value) in params {
+        match key.as_str() {
+            "code" => code = Some(value.clone()),
+            "state" => state = Some(value.clone()),
+            "error" => error = Some(value.clone()),
+            "error_description" => error_description = Some(value.clone()),
+            _ => {}
+        }
+    }
+
+    match state {
+        Some(ref state) if state == expected_state => {}
+        _ => return CallbackOutcome::CsrfReject,
+    }
+
+    if let Some(code) = code {
+        return CallbackOutcome::Code(code);
+    }
+
+    CallbackOutcome::Failed(
+        error_description
+            .or(error)
+            .unwrap_or_else(|| "no authorization code returned".to_string()),
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{CallbackOutcome, interpret_callback, merged_refresh_token};
+
+    #[test]
+    fn new_refresh_token_replaces_old_one() {
+        assert_eq!(
+            merged_refresh_token(Some("new-token".to_string()), "old-token"),
+            "new-token"
+        );
+    }
+
+    #[test]
+    fn old_refresh_token_kept_when_response_has_none() {
+        assert_eq!(merged_refresh_token(None, "old-token"), "old-token");
+    }
+
+    fn params(pairs: &[(&str, &str)]) -> Vec<(String, String)> {
+        pairs
+            .iter()
+            .map(|(key, value)| (key.to_string(), value.to_string()))
+            .collect()
+    }
+
+    #[test]
+    fn callback_with_missing_state_is_csrf_rejected() {
+        let outcome = interpret_callback(&params(&[("code", "abc123")]), "expected-state");
+        assert_eq!(outcome, CallbackOutcome::CsrfReject);
+    }
+
+    #[test]
+    fn callback_with_wrong_state_is_csrf_rejected() {
+        let outcome = interpret_callback(
+            &params(&[("code", "abc123"), ("state", "wrong-state")]),
+            "expected-state",
+        );
+        assert_eq!(outcome, CallbackOutcome::CsrfReject);
+    }
+
+    #[test]
+    fn callback_with_matching_state_and_code_returns_code() {
+        let outcome = interpret_callback(
+            &params(&[("code", "abc123"), ("state", "expected-state")]),
+            "expected-state",
+        );
+        assert_eq!(outcome, CallbackOutcome::Code("abc123".to_string()));
+    }
+
+    #[test]
+    fn callback_error_description_used_when_no_code() {
+        let outcome = interpret_callback(
+            &params(&[
+                ("state", "expected-state"),
+                ("error", "access_denied"),
+                ("error_description", "The user denied access"),
+            ]),
+            "expected-state",
+        );
+        assert_eq!(
+            outcome,
+            CallbackOutcome::Failed("The user denied access".to_string())
+        );
+    }
+
+    #[test]
+    fn callback_error_used_when_no_description() {
+        let outcome = interpret_callback(
+            &params(&[("state", "expected-state"), ("error", "access_denied")]),
+            "expected-state",
+        );
+        assert_eq!(
+            outcome,
+            CallbackOutcome::Failed("access_denied".to_string())
+        );
+    }
+
+    #[test]
+    fn callback_without_code_or_error_reports_generic_failure() {
+        let outcome = interpret_callback(&params(&[("state", "expected-state")]), "expected-state");
+        assert_eq!(
+            outcome,
+            CallbackOutcome::Failed("no authorization code returned".to_string())
+        );
     }
 }

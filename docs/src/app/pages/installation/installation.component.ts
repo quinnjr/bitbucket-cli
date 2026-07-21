@@ -94,7 +94,7 @@ import { CommonModule } from '@angular/common';
           </p>
           <div class="bg-[var(--color-neutral-900)] rounded-lg p-4 space-y-2">
             <div><code class="text-[var(--color-neutral-100)] font-mono text-sm"># Clone the repository</code></div>
-            <div><code class="text-[var(--color-bitbucket-blue-light)] font-mono">git clone https://github.com/PegasusHeavyIndustries/bitbucket-cli.git</code></div>
+            <div><code class="text-[var(--color-bitbucket-blue-light)] font-mono">git clone https://github.com/pegasusheavy/bitbucket-cli.git</code></div>
             <div><code class="text-[var(--color-bitbucket-blue-light)] font-mono">cd bitbucket-cli</code></div>
             <div class="pt-2"><code class="text-[var(--color-neutral-100)] font-mono text-sm"># Build and install</code></div>
             <div><code class="text-[var(--color-bitbucket-blue-light)] font-mono">cargo install --path .</code></div>
@@ -116,7 +116,7 @@ import { CommonModule } from '@angular/common';
             <code class="text-[var(--color-bitbucket-blue-light)] font-mono">bitbucket --version</code>
           </div>
           <p class="text-[var(--color-neutral-400)] text-sm">
-            You should see output like: <code class="bg-[var(--color-neutral-20)] px-2 py-0.5 rounded text-[var(--color-neutral-700)]">bitbucket 0.1.0</code>
+            You should see output like: <code class="bg-[var(--color-neutral-20)] px-2 py-0.5 rounded text-[var(--color-neutral-700)]">bitbucket 0.4.0</code>
           </p>
         </div>
       </section>

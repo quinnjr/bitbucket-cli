@@ -15,18 +15,7 @@ impl BitbucketClient {
         page: Option<u32>,
         pagelen: Option<u32>,
     ) -> Result<Paginated<Issue>> {
-        let mut query = Vec::new();
-
-        if let Some(s) = state {
-            query.push(("state", s.to_string()));
-        }
-        if let Some(p) = page {
-            query.push(("page", p.to_string()));
-        }
-        if let Some(len) = pagelen {
-            query.push(("pagelen", len.to_string()));
-        }
-
+        let query = issue_list_query(state, page, pagelen);
         let query_refs: Vec<(&str, &str)> = query.iter().map(|(k, v)| (*k, v.as_str())).collect();
 
         let path = format!("/repositories/{}/{}/issues", workspace, repo_slug);
@@ -193,5 +182,77 @@ impl BitbucketClient {
             workspace, repo_slug, issue_id
         );
         self.delete(&path).await
+    }
+}
+
+/// Build the query parameters for listing issues.
+///
+/// The state filter is expressed as a BBQL `q` parameter with the state
+/// value quoted, since some states (e.g. "on hold") contain spaces.
+fn issue_list_query(
+    state: Option<IssueState>,
+    page: Option<u32>,
+    pagelen: Option<u32>,
+) -> Vec<(&'static str, String)> {
+    let mut query = Vec::new();
+
+    if let Some(s) = state {
+        query.push(("q", format!("state=\"{}\"", s)));
+    }
+    if let Some(p) = page {
+        query.push(("page", p.to_string()));
+    }
+    if let Some(len) = pagelen {
+        query.push(("pagelen", len.to_string()));
+    }
+
+    query
+}
+
+#[cfg(test)]
+mod tests {
+    use super::issue_list_query;
+    use crate::models::IssueState;
+
+    #[test]
+    fn open_state_builds_quoted_bbql_filter() {
+        assert_eq!(
+            issue_list_query(Some(IssueState::Open), None, None),
+            vec![("q", "state=\"open\"".to_string())]
+        );
+    }
+
+    #[test]
+    fn on_hold_state_keeps_two_word_value_quoted() {
+        assert_eq!(
+            issue_list_query(Some(IssueState::OnHold), None, None),
+            vec![("q", "state=\"on hold\"".to_string())]
+        );
+    }
+
+    #[test]
+    fn no_state_omits_q_pair() {
+        let query = issue_list_query(None, None, None);
+        assert!(query.is_empty());
+    }
+
+    #[test]
+    fn page_and_pagelen_pass_through_as_strings() {
+        assert_eq!(
+            issue_list_query(None, Some(2), Some(50)),
+            vec![("page", "2".to_string()), ("pagelen", "50".to_string())]
+        );
+    }
+
+    #[test]
+    fn state_page_and_pagelen_combine_in_order() {
+        assert_eq!(
+            issue_list_query(Some(IssueState::Open), Some(3), Some(25)),
+            vec![
+                ("q", "state=\"open\"".to_string()),
+                ("page", "3".to_string()),
+                ("pagelen", "25".to_string()),
+            ]
+        );
     }
 }

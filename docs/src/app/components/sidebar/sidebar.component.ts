@@ -5,7 +5,7 @@ import { FontAwesomeModule } from '@fortawesome/angular-fontawesome';
 import { IconDefinition } from '@fortawesome/fontawesome-svg-core';
 import {
   faHome, faDownload, faLock, faCog, faKey, faFolder, faCodeBranch,
-  faBug, faBolt, faTerminal, faScroll, faWrench
+  faBug, faBolt, faBuilding, faTerminal
 } from '@fortawesome/free-solid-svg-icons';
 import { faGithub, faBitbucket } from '@fortawesome/free-brands-svg-icons';
 
@@ -61,7 +61,7 @@ interface NavSection {
       <!-- Footer -->
       <div class="p-4 border-t border-[var(--color-bitbucket-blue)]">
         <a
-          href="https://github.com/PegasusHeavyIndustries/bitbucket-cli"
+          href="https://github.com/pegasusheavy/bitbucket-cli"
           target="_blank"
           class="flex items-center gap-2 text-[var(--color-sidebar-text-muted)] hover:text-white text-sm transition-colors"
         >
@@ -95,14 +95,13 @@ export class SidebarComponent {
         { label: 'pr', path: '/commands/pr', icon: faCodeBranch },
         { label: 'issue', path: '/commands/issue', icon: faBug },
         { label: 'pipeline', path: '/commands/pipeline', icon: faBolt },
+        { label: 'workspace', path: '/commands/workspace', icon: faBuilding },
       ]
     },
     {
       label: 'Advanced',
       items: [
         { label: 'TUI Mode', path: '/tui', icon: faTerminal },
-        { label: 'Scripting', path: '/scripting', icon: faScroll },
-        { label: 'Troubleshooting', path: '/troubleshooting', icon: faWrench },
       ]
     }
   ];

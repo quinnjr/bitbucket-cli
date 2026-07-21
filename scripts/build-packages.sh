@@ -14,7 +14,7 @@ print_usage() {
     echo "Options:"
     echo "  deb     - Build Debian/Ubuntu package"
     echo "  rpm     - Build RPM package"
-    echo "  arch    - Build Arch Linux package"
+    echo "  arch    - Build generic Linux binary tarball (zstd); see packaging/arch/PKGBUILD for a real Arch package"
     echo "  alpine  - Build Alpine Linux tarball"
     echo "  all     - Build all packages"
     exit 1
@@ -26,7 +26,11 @@ build_deb() {
         echo "Installing cargo-deb..."
         cargo install cargo-deb
     fi
-    cargo deb
+    if [ "${SKIP_CARGO_BUILD:-0}" = "1" ]; then
+        cargo deb --no-build
+    else
+        cargo deb
+    fi
     echo "✓ Debian package built in target/debian/"
 }
 
@@ -36,19 +40,24 @@ build_rpm() {
         echo "Installing cargo-generate-rpm..."
         cargo install cargo-generate-rpm
     fi
-    cargo build --release
+    if [ "${SKIP_CARGO_BUILD:-0}" != "1" ]; then
+        cargo build --release
+    fi
     cargo generate-rpm
     echo "✓ RPM package built in target/generate-rpm/"
 }
 
 build_arch() {
-    echo "Building Arch Linux package..."
-    cargo build --release
+    echo "Building generic Linux binary tarball..."
+    if [ "${SKIP_CARGO_BUILD:-0}" != "1" ]; then
+        cargo build --release
+    fi
     cd target/release
     VERSION=$(grep '^version = ' ../../Cargo.toml | head -1 | cut -d'"' -f2)
-    tar -I 'zstd -19' -cf "../bitbucket-cli-${VERSION}-x86_64.pkg.tar.zst" bitbucket
+    tar -I 'zstd -19' -cf "../bitbucket-cli-${VERSION}-x86_64-linux.tar.zst" bitbucket
     cd ../..
-    echo "✓ Arch package built in target/bitbucket-cli-${VERSION}-x86_64.pkg.tar.zst"
+    echo "✓ Linux binary tarball built in target/bitbucket-cli-${VERSION}-x86_64-linux.tar.zst"
+    echo "  (For a proper Arch Linux package, build from packaging/arch/PKGBUILD with makepkg.)"
 }
 
 build_alpine() {
@@ -79,9 +88,14 @@ case "${1:-all}" in
         build_alpine
         ;;
     all)
+        # Build the shared gnu release binary once; deb/rpm/arch all reuse it.
+        echo "Building release binary (shared by deb/rpm/arch)..."
+        cargo build --release
+        SKIP_CARGO_BUILD=1
         build_deb
         build_rpm
         build_arch
+        SKIP_CARGO_BUILD=0
         build_alpine
         echo ""
         echo "✓ All packages built successfully!"

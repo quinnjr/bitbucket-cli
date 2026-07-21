@@ -10,7 +10,7 @@ The following package formats are now supported:
 
 - ✅ **Debian/Ubuntu** (`.deb`)
 - ✅ **Red Hat/Fedora/CentOS** (`.rpm`)
-- ✅ **Arch Linux** (`.pkg.tar.zst`)
+- ✅ **Arch Linux** (PKGBUILD built with `makepkg`, plus a generic binary tarball `.tar.zst`)
 - ✅ **Alpine Linux** (static musl `.tar.gz`)
 - ✅ **Windows** (`.msi` installer)
 
@@ -71,9 +71,9 @@ Added exclusions for packaging artifacts:
 - Installs to `/usr/bin/bitbucket`
 - Includes documentation in `/usr/share/doc/bitbucket-cli/`
 
-### Arch Linux (.pkg.tar.zst)
-- Provides PKGBUILD for AUR submission
-- Compressed with zstd level 19
+### Arch Linux
+- Provides PKGBUILD (release asset and `packaging/arch/PKGBUILD`) for building a real pacman package with `makepkg -si`, ready for AUR submission
+- Releases also ship `bitbucket-cli-v<version>-x86_64-linux.tar.zst`, a plain zstd tarball of the `bitbucket` binary (not a pacman package — `pacman -U` does not work on it)
 - Follows Arch packaging standards
 - Ready for community distribution
 
@@ -103,9 +103,14 @@ sudo dpkg -i bitbucket-cli_amd64.deb
 wget https://github.com/pegasusheavy/bitbucket-cli/releases/latest/download/bitbucket-cli.x86_64.rpm
 sudo rpm -i bitbucket-cli.x86_64.rpm
 
-# Arch Linux
-wget https://github.com/pegasusheavy/bitbucket-cli/releases/latest/download/bitbucket-cli-vX.X.X-x86_64.pkg.tar.zst
-sudo pacman -U bitbucket-cli-vX.X.X-x86_64.pkg.tar.zst
+# Arch Linux (recommended: download the PKGBUILD and build the package)
+wget https://github.com/pegasusheavy/bitbucket-cli/releases/latest/download/PKGBUILD
+makepkg -si
+
+# Arch Linux alternative: download the binary tarball and extract it manually
+wget https://github.com/pegasusheavy/bitbucket-cli/releases/latest/download/bitbucket-cli-vX.X.X-x86_64-linux.tar.zst
+tar --zstd -xf bitbucket-cli-vX.X.X-x86_64-linux.tar.zst
+sudo mv bitbucket /usr/local/bin/
 
 # Alpine Linux
 wget https://github.com/pegasusheavy/bitbucket-cli/releases/latest/download/bitbucket-cli-vX.X.X-alpine-x86_64.tar.gz

@@ -42,12 +42,8 @@ export const routes: Routes = [
     loadComponent: () => import('./pages/commands/pipeline/pipeline.component').then(m => m.PipelineCommandComponent)
   },
   {
-    path: 'scripting',
-    loadComponent: () => import('./pages/not-found/not-found.component').then(m => m.NotFoundComponent)
-  },
-  {
-    path: 'troubleshooting',
-    loadComponent: () => import('./pages/not-found/not-found.component').then(m => m.NotFoundComponent)
+    path: 'commands/workspace',
+    loadComponent: () => import('./pages/commands/workspace/workspace.component').then(m => m.WorkspaceCommandComponent)
   },
   {
     path: '**',

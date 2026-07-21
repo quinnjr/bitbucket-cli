@@ -25,9 +25,16 @@ impl CredentialStore {
             }
 
             // Migrate credentials from the legacy plain-text file store.
+            // TODO: this migrate-then-delete path is untested — testing it requires seams (trait or
+            // injected constructors) over KeyringStore/FileStore so a fake keyring and temp file store can be substituted; see CHANGELOG 0.4.0.
             if let Some(credential) = self.file.get_credential()? {
                 keyring.store_credential(&credential)?;
-                let _ = self.file.delete_credential();
+                if let Err(err) = self.file.delete_credential() {
+                    eprintln!(
+                        "Warning: could not remove legacy plaintext credential file: {}",
+                        err
+                    );
+                }
                 return Ok(Some(credential));
             }
 
