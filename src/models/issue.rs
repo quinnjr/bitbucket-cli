@@ -132,6 +132,7 @@ pub struct IssueLinks {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct CreateIssueRequest {
     pub title: String,
     pub content: Option<IssueContentRequest>,
@@ -188,4 +189,34 @@ pub struct IssueCommentLinks {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateIssueCommentRequest {
     pub content: IssueContentRequest,
+}
+
+/// A single entry in an issue's change log (state transitions, reassignments,
+/// priority bumps, ...).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IssueChange {
+    pub id: Option<u64>,
+    pub user: Option<User>,
+    pub message: Option<IssueContent>,
+    pub created_on: Option<DateTime<Utc>>,
+    /// Map of changed field name to `{old, new}` values. Kept as raw JSON
+    /// because the API emits arbitrary field names here.
+    pub changes: Option<serde_json::Value>,
+}
+
+/// Shared shape for issue tracker metadata: components, milestones and
+/// versions all serialize as an id plus a name.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IssueMetaItem {
+    pub id: Option<u64>,
+    pub name: Option<String>,
+}
+
+/// A file attached to an issue.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IssueAttachment {
+    pub name: Option<String>,
+    /// Kept as raw JSON: the API serves `links.self.href` for attachments as
+    /// either a string or an array of strings.
+    pub links: Option<serde_json::Value>,
 }

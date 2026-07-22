@@ -60,16 +60,28 @@ import { CommonModule } from '@angular/common';
 })
 export class PipelineCommandComponent {
   subcommands = [
-    { name: 'list', description: 'List pipelines' },
-    { name: 'view', description: 'View pipeline details' },
-    { name: 'trigger', description: 'Trigger a new pipeline' },
-    { name: 'stop', description: 'Stop a running pipeline' },
+    { name: 'list', description: 'List pipelines (--status, --target-branch, --sort, --page)' },
+    { name: 'view', description: 'View pipeline details (--logs, --step, --full-logs)' },
+    { name: 'trigger', description: 'Trigger a new pipeline (--branch, --commit, --pipeline, --var, --secured-var, --wait)' },
+    { name: 'stop', description: 'Stop a running pipeline (--build or --uuid)' },
+    { name: 'rerun', description: 'Re-run a pipeline by triggering an equivalent one' },
+    { name: 'config', description: 'View or update the repository pipelines configuration (--enable, --disable, --next-build-number)' },
+    { name: 'variable', description: 'Manage repository pipeline variables (list, set, delete)' },
+    { name: 'workspace-variable', description: 'Manage workspace-level pipeline variables (list, set, delete)' },
+    { name: 'schedule', description: 'Manage pipeline schedules (list, create, delete)' },
+    { name: 'cache', description: 'Manage pipeline dependency caches (list, delete)' },
   ];
 
   examples = [
     { title: 'List recent pipelines', command: 'bitbucket pipeline list myworkspace/myrepo' },
+    { title: 'List completed pipelines on main', command: 'bitbucket pipeline list myworkspace/myrepo --status COMPLETED --target-branch main' },
     { title: 'Trigger pipeline on main', command: 'bitbucket pipeline trigger myworkspace/myrepo --branch main' },
-    { title: 'Trigger and wait', command: 'bitbucket pipeline trigger myworkspace/myrepo --branch main --wait' },
+    { title: 'Trigger with variables and wait', command: 'bitbucket pipeline trigger myworkspace/myrepo --branch main --var ENV=staging --secured-var TOKEN=s3cret --wait' },
+    { title: 'Trigger a custom pipeline on a commit', command: 'bitbucket pipeline trigger myworkspace/myrepo --commit abc123 --pipeline deploy' },
     { title: 'View pipeline details', command: 'bitbucket pipeline view myworkspace/myrepo --build 123' },
+    { title: 'View full logs for one step', command: 'bitbucket pipeline view myworkspace/myrepo --build 123 --step 2 --full-logs' },
+    { title: 'Re-run a pipeline', command: 'bitbucket pipeline rerun myworkspace/myrepo --build 123' },
+    { title: 'Set a secured pipeline variable', command: 'bitbucket pipeline variable set myworkspace/myrepo DEPLOY_KEY abc123 --secured' },
+    { title: 'Create a nightly schedule', command: 'bitbucket pipeline schedule create myworkspace/myrepo --branch main --cron "0 0 12 * * ? *"' },
   ];
 }

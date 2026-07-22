@@ -76,11 +76,6 @@ impl App {
         self.status = Some(message.to_string());
     }
 
-    /// Clear status message
-    pub fn clear_status(&mut self) {
-        self.status = None;
-    }
-
     /// Set error message
     pub fn set_error(&mut self, message: &str) {
         self.error = Some(message.to_string());
@@ -419,15 +414,6 @@ impl App {
         } else {
             self.set_error("No workspace configured");
         }
-        Ok(())
-    }
-
-    /// Load all data
-    pub async fn load_all_data(&mut self) -> Result<()> {
-        self.load_repositories().await?;
-        self.load_pull_requests().await?;
-        self.load_issues().await?;
-        self.load_pipelines().await?;
         Ok(())
     }
 }

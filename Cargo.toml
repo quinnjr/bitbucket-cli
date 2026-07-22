@@ -1,6 +1,6 @@
 [package]
 name = "bitbucket-cli"
-version = "0.4.0"
+version = "1.0.0"
 edition = "2024"
 rust-version = "1.85"
 description = "A powerful command-line interface for Bitbucket Cloud - manage repos, PRs, issues, and pipelines from your terminal with OAuth 2.0"
@@ -33,7 +33,8 @@ crossterm = "0.29"
 
 # Async runtime & HTTP
 tokio = { version = "1", features = ["full"] }
-reqwest = { version = "0.12", features = ["json", "rustls-tls", "multipart"], default-features = false }
+reqwest = { version = "0.12", features = ["json", "rustls-tls", "multipart", "gzip"], default-features = false }
+bytes = "1"
 
 # Serialization
 serde = { version = "1", features = ["derive"] }
@@ -73,7 +74,7 @@ keyring = { version = "3", default-features = false, features = ["apple-native"]
 keyring = { version = "3", default-features = false, features = ["windows-native"] }
 
 [dev-dependencies]
-criterion = { version = "0.8", features = ["html_reports"] }
+criterion = { version = "0.8", default-features = false }
 
 [lib]
 name = "bitbucket_cli"

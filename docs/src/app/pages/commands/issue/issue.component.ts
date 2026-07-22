@@ -60,17 +60,35 @@ import { CommonModule } from '@angular/common';
 })
 export class IssueCommandComponent {
   subcommands = [
-    { name: 'list', description: 'List issues' },
-    { name: 'view', description: 'View issue details' },
-    { name: 'create', description: 'Create a new issue' },
-    { name: 'comment', description: 'Add a comment to an issue' },
+    { name: 'list', description: 'List issues (--state, --kind, --priority, --assignee, --reporter, -q/--query, --sort, --page)' },
+    { name: 'view', description: 'View issue details (--comments to include the discussion)' },
+    { name: 'create', description: 'Create a new issue (--title, --body, --kind, --priority, --assignee, --component, --milestone, --version)' },
+    { name: 'edit', description: "Edit an issue's fields (--title, --body, --kind, --priority, --assignee, --state)" },
+    { name: 'delete', description: 'Delete an issue' },
     { name: 'close', description: 'Close an issue' },
     { name: 'reopen', description: 'Reopen an issue' },
+    { name: 'comment', description: 'Add a comment to an issue' },
+    { name: 'comments', description: 'List comments on an issue' },
+    { name: 'edit-comment', description: 'Edit a comment on an issue' },
+    { name: 'delete-comment', description: 'Delete a comment from an issue' },
+    { name: 'changes', description: 'List the change log of an issue' },
+    { name: 'vote', description: 'Vote for an issue' },
+    { name: 'unvote', description: 'Remove your vote from an issue' },
+    { name: 'watch', description: 'Watch an issue' },
+    { name: 'unwatch', description: 'Stop watching an issue' },
+    { name: 'components', description: 'List the components defined in the issue tracker' },
+    { name: 'milestones', description: 'List the milestones defined in the issue tracker' },
+    { name: 'versions', description: 'List the versions defined in the issue tracker' },
+    { name: 'attachment', description: 'Manage issue attachments (list, add, delete)' },
   ];
 
   examples = [
     { title: 'List issues', command: 'bitbucket issue list myworkspace/myrepo' },
-    { title: 'Create an issue', command: 'bitbucket issue create myworkspace/myrepo --title "Bug report" --kind bug' },
+    { title: 'List critical open bugs', command: 'bitbucket issue list myworkspace/myrepo --state open --kind bug --priority critical' },
+    { title: 'Create an issue', command: 'bitbucket issue create myworkspace/myrepo --title "Bug report" --kind bug --priority major --component backend' },
+    { title: 'View an issue with its comments', command: 'bitbucket issue view myworkspace/myrepo 42 --comments' },
+    { title: 'Edit an issue', command: 'bitbucket issue edit myworkspace/myrepo 42 --priority blocker --assignee 557058:aaaa-bbbb' },
+    { title: 'Attach a file', command: 'bitbucket issue attachment add myworkspace/myrepo 42 screenshot.png' },
     { title: 'Close an issue', command: 'bitbucket issue close myworkspace/myrepo 42' },
   ];
 }

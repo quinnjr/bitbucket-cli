@@ -5,6 +5,73 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0] - 2026-07-21
+
+### Added
+
+- Global `--output <table|json>` flag on every command; `--output json` emits
+  raw pretty-printed JSON for scripting.
+- New top-level `user` command: `whoami`, `view`, `emails`.
+- repo: new subcommand groups `branch`, `tag`, `commit`, `file`, `webhook`,
+  `branch-restriction`, `reviewer`, `permission`, `deploy-key`, `environment`,
+  `deployment`, and `branching-model`; new `watchers` and `forks` commands;
+  `download get`; `list` filters (`--role`, `-q/--query`, `--sort`, `--page`);
+  `create` flags `--language`, `--issues`, `--wiki`, `--website`, and
+  `--main-branch`; `update --website`.
+- pr: new `edit`, `unapprove`, `request-changes`, `unrequest-changes`,
+  `commits`, `statuses`, `diffstat`, `activity`, and `patch` commands; a `task`
+  group (`list`, `add`, `resolve`, `reopen`, `delete`); comment management
+  (`edit-comment`, `delete-comment`, `resolve-comment`, `unresolve-comment`);
+  `create --reviewers`; `list` accepts a repeatable `--state` plus
+  `-q/--query`, `--sort`, and `--page`; `comment --path/--line/--parent` for
+  inline and threaded comments.
+- issue: new `edit`, `delete`, `comments`, `vote`/`unvote`, `watch`/`unwatch`,
+  `changes`, `components`, `milestones`, `versions`, an `attachment` group
+  (`list`, `add`, `delete`), `edit-comment`, and `delete-comment` commands;
+  `list` filters (`--kind`, `--priority`, `--assignee`, `--reporter`,
+  `-q/--query`, `--sort`, `--page`);
+  `create --assignee/--component/--milestone/--version`; `view --comments`.
+- pipeline: `trigger --var/--secured-var/--commit`; `list --status/
+  --target-branch/--sort/--page`; `view --step/--full-logs`; `stop --uuid`;
+  new `variable`, `workspace-variable`, `schedule`, `cache`, `config`, and
+  `rerun` commands.
+- workspace: new `view`, `members`, and `permissions` commands and a `project`
+  group (`list`, `view`, `create`, `edit`, `delete`); `list` gained `--role`,
+  `-q/--query`, `--sort`, `--limit`, and `--all`.
+
+### Changed
+
+- `workspace list` now fetches a single page by default and supports filter
+  flags; pass `--all` to fetch every page as before.
+- `issue list` now composes the individual filter flags into a single BBQL
+  `q=` expression; `--query` overrides the individual flags.
+- Library API: `BitbucketClient::update_pull_request` now takes an
+  `UpdatePullRequestRequest` body; `BitbucketClient::list_issue_comments` now
+  takes a `pagelen: Option<u32>` argument; `models::UserRef` has been reshaped
+  to optional `uuid`/`username` fields. Public request/filter structs are now
+  `#[non_exhaustive]`, and the internal `*_filtered` client methods and their
+  filter structs are `pub(crate)`, so the stable library surface is smaller.
+- Config: the unused `[defaults] repository` and `[display]` (`color`, `pager`)
+  keys have been removed; they were never read.
+
+### Fixed
+
+- `pr checkout` no longer fetches from the wrong repository: it verifies that
+  `origin` points at the PR's repository, refuses PRs that come from forks
+  (with instructions to fetch manually), and fast-forwards a stale local
+  branch to the fetched tip instead of silently reusing it.
+- `pipeline trigger --wait` no longer hangs forever on pipelines that enter
+  the Paused state; it now reports that a manual resume is required.
+- The `User-Agent` header now carries the real crate version.
+- `UserLinks.self` now deserializes correctly from the API's `self` key.
+
+### Removed
+
+- Dead `get_main_branch` and `list_branches` functions from the repos API
+  module (superseded by the refs API).
+- Dead `defaults.repository` config field.
+- Dead TUI `load_all_data` method.
+
 ## [0.4.0] - 2026-07-21
 
 ### Breaking

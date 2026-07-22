@@ -67,6 +67,25 @@ cargo fmt
 - Keep functions focused and small
 - Use meaningful variable and function names
 
+### Command taxonomy
+
+The top-level commands (`auth`, `repo`, `pr`, `issue`, `pipeline`, `workspace`,
+`user`) mirror the major Bitbucket resource types. A resource that is *owned by
+a repository* is a subcommand group under `repo` (e.g. `repo branch`,
+`repo webhook`, `repo permission`) rather than a new top-level command. `pr`,
+`issue`, and `pipeline` are top-level for historical reasons and because they
+are the day-to-day nouns; do not add new top-level commands for repo-scoped
+resources. When a resource has more than one verb (list/create/delete), group
+them under a subcommand (`repo download {list,get,delete}`), never as flat
+sibling verbs (`download-list`, `download-get`).
+
+### Pagination and limits
+
+All paginated list commands share one policy via `cli::pagination`: a
+`--limit` (default 25) capped at 100 with a notice, using `effective_limit`.
+Do not add a per-command `MAX_LIMIT`, a clap `range(1..=100)` validator, or a
+bespoke cap — reuse the shared helper so behavior and wording stay uniform.
+
 ## Commit Messages
 
 - Use the present tense ("Add feature" not "Added feature")

@@ -5,7 +5,7 @@ import { FontAwesomeModule } from '@fortawesome/angular-fontawesome';
 import { IconDefinition } from '@fortawesome/fontawesome-svg-core';
 import {
   faHome, faDownload, faLock, faCog, faKey, faFolder, faCodeBranch,
-  faBug, faBolt, faBuilding, faTerminal
+  faBug, faBolt, faBuilding, faTerminal, faUser
 } from '@fortawesome/free-solid-svg-icons';
 import { faGithub, faBitbucket } from '@fortawesome/free-brands-svg-icons';
 
@@ -96,6 +96,7 @@ export class SidebarComponent {
         { label: 'issue', path: '/commands/issue', icon: faBug },
         { label: 'pipeline', path: '/commands/pipeline', icon: faBolt },
         { label: 'workspace', path: '/commands/workspace', icon: faBuilding },
+        { label: 'user', path: '/commands/user', icon: faUser },
       ]
     },
     {

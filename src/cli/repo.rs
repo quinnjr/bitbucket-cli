@@ -8,6 +8,7 @@ use tabled::{Table, Tabled};
 
 use super::parse_repo;
 use crate::api::{BitbucketClient, download_url};
+use crate::cli::pagination::{effective_limit, format_size};
 use crate::models::{CreateRepositoryRequest, UpdateRepositoryRequest};
 
 #[derive(Subcommand)]
@@ -17,9 +18,25 @@ pub enum RepoCommands {
         /// Workspace slug (defaults to --workspace or the configured default workspace)
         workspace: Option<String>,
 
-        /// Number of results per page
+        /// Number of results per page (max 100)
         #[arg(short, long, default_value = "25")]
         limit: u32,
+
+        /// Filter by the authenticated user's role on the repository
+        #[arg(long, value_parser = ["member", "contributor", "admin", "owner"])]
+        role: Option<String>,
+
+        /// Filter with a Bitbucket query (BBQL) expression, e.g. 'language="rust"'
+        #[arg(short, long)]
+        query: Option<String>,
+
+        /// Sort by a field, e.g. 'name' or '-updated_on' for descending
+        #[arg(long)]
+        sort: Option<String>,
+
+        /// Page number to fetch
+        #[arg(long)]
+        page: Option<u32>,
     },
 
     /// View repository details
@@ -67,6 +84,26 @@ pub enum RepoCommands {
         /// Fork policy: allow_forks, no_public_forks, no_forks (default: allow_forks when --public, no_public_forks otherwise)
         #[arg(long)]
         fork_policy: Option<String>,
+
+        /// Primary language
+        #[arg(short, long)]
+        language: Option<String>,
+
+        /// Enable or disable the issue tracker (default: enabled)
+        #[arg(long, value_name = "true|false")]
+        issues: Option<bool>,
+
+        /// Enable or disable the wiki (default: disabled)
+        #[arg(long, value_name = "true|false")]
+        wiki: Option<bool>,
+
+        /// Website URL to show on the repository
+        #[arg(long)]
+        website: Option<String>,
+
+        /// Main branch name
+        #[arg(long)]
+        main_branch: Option<String>,
     },
 
     /// Update repository settings
@@ -106,6 +143,10 @@ pub enum RepoCommands {
         #[arg(long, value_name = "true|false")]
         wiki: Option<bool>,
 
+        /// Website URL to show on the repository
+        #[arg(long)]
+        website: Option<String>,
+
         /// Main branch name
         #[arg(long)]
         main_branch: Option<String>,
@@ -144,10 +185,102 @@ pub enum RepoCommands {
         yes: bool,
     },
 
+    /// List users watching a repository
+    Watchers {
+        /// Repository in format workspace/repo-slug
+        repo: String,
+
+        /// Maximum number of watchers to list (max 100)
+        #[arg(short, long, default_value = "25")]
+        limit: u32,
+    },
+
+    /// List forks of a repository
+    Forks {
+        /// Repository in format workspace/repo-slug
+        repo: String,
+
+        /// Maximum number of forks to list (max 100)
+        #[arg(short, long, default_value = "25")]
+        limit: u32,
+    },
+
     /// Manage repository downloads (uploaded file artifacts)
     Download {
         #[command(subcommand)]
         command: DownloadCommands,
+    },
+
+    /// Manage repository branches
+    Branch {
+        #[command(subcommand)]
+        command: super::branch::BranchCommands,
+    },
+
+    /// Manage repository tags
+    Tag {
+        #[command(subcommand)]
+        command: super::tag::TagCommands,
+    },
+
+    /// Work with repository commits
+    Commit {
+        #[command(subcommand)]
+        command: super::commit::CommitCommands,
+    },
+
+    /// Browse repository files and file contents
+    File {
+        #[command(subcommand)]
+        command: super::file::FileCommands,
+    },
+
+    /// Manage repository webhooks
+    Webhook {
+        #[command(subcommand)]
+        command: super::webhook::WebhookCommands,
+    },
+
+    /// Manage branch restrictions (branch permissions)
+    BranchRestriction {
+        #[command(subcommand)]
+        command: super::branch_restriction::BranchRestrictionCommands,
+    },
+
+    /// Manage default reviewers
+    Reviewer {
+        #[command(subcommand)]
+        command: super::reviewer::ReviewerCommands,
+    },
+
+    /// Inspect repository user and group permissions
+    Permission {
+        #[command(subcommand)]
+        command: super::permission::PermissionCommands,
+    },
+
+    /// Manage repository deploy keys
+    DeployKey {
+        #[command(subcommand)]
+        command: super::deploy::DeployKeyCommands,
+    },
+
+    /// Manage deployment environments
+    Environment {
+        #[command(subcommand)]
+        command: super::deploy::EnvironmentCommands,
+    },
+
+    /// View repository deployments
+    Deployment {
+        #[command(subcommand)]
+        command: super::deploy::DeploymentCommands,
+    },
+
+    /// Manage the repository branching model
+    BranchingModel {
+        #[command(subcommand)]
+        command: super::branching_model::BranchingModelCommands,
     },
 }
 
@@ -167,6 +300,19 @@ pub enum DownloadCommands {
     List {
         /// Repository in format workspace/repo-slug
         repo: String,
+    },
+
+    /// Download an artifact from the repository's downloads area
+    Get {
+        /// Repository in format workspace/repo-slug
+        repo: String,
+
+        /// Name of the artifact to download
+        name: String,
+
+        /// Output path (defaults to the artifact name in the current directory)
+        #[arg(short, long)]
+        output: Option<PathBuf>,
     },
 
     /// Delete an artifact from the repository's downloads area
@@ -195,53 +341,83 @@ struct RepoRow {
     updated: String,
 }
 
+#[derive(Tabled)]
+struct WatcherRow {
+    #[tabled(rename = "NAME")]
+    name: String,
+    #[tabled(rename = "USERNAME")]
+    username: String,
+}
+
+/// Map repositories into table rows shared by `repo list` and `repo forks`.
+fn repo_rows(repos: &[crate::models::Repository]) -> Vec<RepoRow> {
+    repos
+        .iter()
+        .map(|r| RepoRow {
+            name: r.full_name.clone(),
+            description: r
+                .description
+                .clone()
+                .unwrap_or_default()
+                .chars()
+                .take(40)
+                .collect::<String>(),
+            private: if r.is_private.unwrap_or(false) {
+                "Yes"
+            } else {
+                "No"
+            }
+            .to_string(),
+            updated: r
+                .updated_on
+                .map(|d| d.format("%Y-%m-%d").to_string())
+                .unwrap_or_default(),
+        })
+        .collect()
+}
+
 impl RepoCommands {
     pub async fn run(self) -> Result<()> {
         match self {
-            RepoCommands::List { workspace, limit } => {
+            RepoCommands::List {
+                workspace,
+                limit,
+                role,
+                query,
+                sort,
+                page,
+            } => {
                 let workspace = super::resolve_workspace(workspace)?;
+                let limit = effective_limit(limit);
                 let client = BitbucketClient::from_stored().await?;
                 let repos = client
-                    .list_repositories(&workspace, None, Some(limit))
+                    .list_repositories_filtered(
+                        &workspace,
+                        role.as_deref(),
+                        query.as_deref(),
+                        sort.as_deref(),
+                        page,
+                        Some(limit),
+                    )
                     .await?;
+
+                if super::output_json() {
+                    return super::print_json(&repos.values);
+                }
 
                 if repos.values.is_empty() {
                     println!("No repositories found in workspace '{}'", workspace);
                     return Ok(());
                 }
 
-                let rows: Vec<RepoRow> = repos
-                    .values
-                    .iter()
-                    .map(|r| RepoRow {
-                        name: r.full_name.clone(),
-                        description: r
-                            .description
-                            .clone()
-                            .unwrap_or_default()
-                            .chars()
-                            .take(40)
-                            .collect::<String>(),
-                        private: if r.is_private.unwrap_or(false) {
-                            "Yes"
-                        } else {
-                            "No"
-                        }
-                        .to_string(),
-                        updated: r
-                            .updated_on
-                            .map(|d| d.format("%Y-%m-%d").to_string())
-                            .unwrap_or_default(),
-                    })
-                    .collect();
-
-                let table = Table::new(rows).to_string();
+                let table = Table::new(repo_rows(&repos.values)).to_string();
                 println!("{}", table);
 
                 if repos.next.is_some() {
                     println!(
-                        "\n{} More repositories available. Use --limit to see more.",
-                        "ℹ".blue()
+                        "\n{} More repositories available. Use --page {} to see the next page.",
+                        "ℹ".blue(),
+                        page.unwrap_or(1) + 1
                     );
                 }
 
@@ -262,6 +438,10 @@ impl RepoCommands {
                         }
                     }
                     anyhow::bail!("Could not find repository URL");
+                }
+
+                if super::output_json() {
+                    return super::print_json(&repository);
                 }
 
                 println!("{}", repository.full_name.bold());
@@ -365,6 +545,11 @@ impl RepoCommands {
                 public,
                 project,
                 fork_policy,
+                language,
+                issues,
+                wiki,
+                website,
+                main_branch,
             } => {
                 let (workspace, name) = super::resolve_create_target(workspace, name)?;
 
@@ -372,27 +557,26 @@ impl RepoCommands {
 
                 let slug = name.to_lowercase().replace(' ', "-");
 
-                let resolved_fork_policy = fork_policy.unwrap_or_else(|| {
-                    if public {
-                        "allow_forks".to_string()
-                    } else {
-                        "no_public_forks".to_string()
-                    }
-                });
-
-                let request = CreateRepositoryRequest {
-                    scm: "git".to_string(),
-                    name: Some(name.clone()),
+                let request = build_create_request(CreateFlags {
+                    name,
                     description,
-                    is_private: Some(!public),
-                    project: project.map(|key| crate::models::ProjectKey { key }),
-                    fork_policy: Some(resolved_fork_policy),
-                    ..Default::default()
-                };
+                    public,
+                    project,
+                    fork_policy,
+                    language,
+                    issues,
+                    wiki,
+                    website,
+                    main_branch,
+                });
 
                 let repository = client
                     .create_repository(&workspace, &slug, &request)
                     .await?;
+
+                if super::output_json() {
+                    return super::print_json(&repository);
+                }
 
                 println!(
                     "{} Created repository {}",
@@ -419,6 +603,7 @@ impl RepoCommands {
                 fork_policy,
                 issues,
                 wiki,
+                website,
                 main_branch,
             } => {
                 let (workspace, repo_slug) = parse_repo(&repo)?;
@@ -432,6 +617,7 @@ impl RepoCommands {
                     fork_policy,
                     issues,
                     wiki,
+                    website,
                     main_branch,
                 });
 
@@ -445,6 +631,10 @@ impl RepoCommands {
                 let updated = client
                     .update_repository(&workspace, &repo_slug, &request)
                     .await?;
+
+                if super::output_json() {
+                    return super::print_json(&updated);
+                }
 
                 println!(
                     "{} Updated repository {}",
@@ -481,6 +671,10 @@ impl RepoCommands {
                     .update_repository(&workspace, &repo_slug, &request)
                     .await?;
 
+                if super::output_json() {
+                    return super::print_json(&updated);
+                }
+
                 let project_label = updated
                     .project
                     .as_ref()
@@ -514,6 +708,10 @@ impl RepoCommands {
                     )
                     .await?;
 
+                if super::output_json() {
+                    return super::print_json(&forked);
+                }
+
                 println!("{} Forked to {}", "✓".green(), forked.full_name.cyan());
 
                 Ok(())
@@ -534,12 +732,95 @@ impl RepoCommands {
                 let client = BitbucketClient::from_stored().await?;
                 client.delete_repository(&workspace, &repo_slug).await?;
 
+                if super::output_json() {
+                    return super::print_json(&serde_json::json!({"ok": true}));
+                }
+
                 println!("{} Deleted repository {}", "✓".green(), repo);
 
                 Ok(())
             }
 
+            RepoCommands::Watchers { repo, limit } => {
+                let (workspace, repo_slug) = parse_repo(&repo)?;
+                let limit = effective_limit(limit);
+                let client = BitbucketClient::from_stored().await?;
+                let watchers = client
+                    .list_watchers(&workspace, &repo_slug, Some(limit))
+                    .await?;
+
+                if super::output_json() {
+                    return super::print_json(&watchers.values);
+                }
+
+                if watchers.values.is_empty() {
+                    println!("No watchers found for {}", repo);
+                    return Ok(());
+                }
+
+                let rows: Vec<WatcherRow> = watchers
+                    .values
+                    .iter()
+                    .map(|u| WatcherRow {
+                        name: u.display_name.clone(),
+                        username: u.username.clone().unwrap_or_else(|| "-".to_string()),
+                    })
+                    .collect();
+
+                println!("{}", Table::new(rows));
+
+                if watchers.next.is_some() {
+                    println!(
+                        "\n{} More watchers available. Use --limit to see more.",
+                        "ℹ".blue()
+                    );
+                }
+
+                Ok(())
+            }
+
+            RepoCommands::Forks { repo, limit } => {
+                let (workspace, repo_slug) = parse_repo(&repo)?;
+                let limit = effective_limit(limit);
+                let client = BitbucketClient::from_stored().await?;
+                let forks = client
+                    .list_forks(&workspace, &repo_slug, Some(limit))
+                    .await?;
+
+                if super::output_json() {
+                    return super::print_json(&forks.values);
+                }
+
+                if forks.values.is_empty() {
+                    println!("No forks found for {}", repo);
+                    return Ok(());
+                }
+
+                println!("{}", Table::new(repo_rows(&forks.values)));
+
+                if forks.next.is_some() {
+                    println!(
+                        "\n{} More forks available. Use --limit to see more.",
+                        "ℹ".blue()
+                    );
+                }
+
+                Ok(())
+            }
+
             RepoCommands::Download { command } => command.run().await,
+            RepoCommands::Branch { command } => command.run().await,
+            RepoCommands::Tag { command } => command.run().await,
+            RepoCommands::Commit { command } => command.run().await,
+            RepoCommands::File { command } => command.run().await,
+            RepoCommands::Webhook { command } => command.run().await,
+            RepoCommands::BranchRestriction { command } => command.run().await,
+            RepoCommands::Reviewer { command } => command.run().await,
+            RepoCommands::Permission { command } => command.run().await,
+            RepoCommands::DeployKey { command } => command.run().await,
+            RepoCommands::Environment { command } => command.run().await,
+            RepoCommands::Deployment { command } => command.run().await,
+            RepoCommands::BranchingModel { command } => command.run().await,
         }
     }
 }
@@ -584,6 +865,10 @@ impl DownloadCommands {
                     .upload_downloads(&workspace, &repo_slug, &uploads)
                     .await?;
 
+                if super::output_json() {
+                    return super::print_json(&serde_json::json!({"ok": true}));
+                }
+
                 for (name, _) in &uploads {
                     println!(
                         "{} Uploaded {}",
@@ -599,6 +884,10 @@ impl DownloadCommands {
                 let (workspace, repo_slug) = parse_repo(&repo)?;
                 let client = BitbucketClient::from_stored().await?;
                 let downloads = client.list_downloads(&workspace, &repo_slug).await?;
+
+                if super::output_json() {
+                    return super::print_json(&downloads);
+                }
 
                 if downloads.is_empty() {
                     println!("No downloads found in {}", repo);
@@ -618,6 +907,43 @@ impl DownloadCommands {
                     .collect();
 
                 println!("{}", Table::new(rows));
+
+                Ok(())
+            }
+
+            DownloadCommands::Get { repo, name, output } => {
+                let (workspace, repo_slug) = parse_repo(&repo)?;
+                let client = BitbucketClient::from_stored().await?;
+
+                let bytes = client
+                    .get_download(&workspace, &repo_slug, &name)
+                    .await
+                    .with_context(|| {
+                        format!(
+                            "Failed to download '{}' from {}/{}",
+                            name, workspace, repo_slug
+                        )
+                    })?;
+
+                let output = output.unwrap_or_else(|| PathBuf::from(&name));
+                std::fs::write(&output, &bytes)
+                    .with_context(|| format!("Failed to write '{}'", output.display()))?;
+
+                if super::output_json() {
+                    return super::print_json(&serde_json::json!({
+                        "ok": true,
+                        "path": output.display().to_string(),
+                        "bytes": bytes.len(),
+                    }));
+                }
+
+                println!(
+                    "{} Downloaded {} to {} ({} bytes)",
+                    "✓".green(),
+                    name.cyan(),
+                    output.display(),
+                    bytes.len()
+                );
 
                 Ok(())
             }
@@ -642,11 +968,65 @@ impl DownloadCommands {
                         )
                     })?;
 
+                if super::output_json() {
+                    return super::print_json(&serde_json::json!({"ok": true}));
+                }
+
                 println!("{} Deleted download {}", "✓".green(), name);
 
                 Ok(())
             }
         }
+    }
+}
+
+/// The `repo create` command-line flags, grouped for translation into a
+/// `CreateRepositoryRequest`.
+#[derive(Default)]
+struct CreateFlags {
+    name: String,
+    description: Option<String>,
+    public: bool,
+    project: Option<String>,
+    fork_policy: Option<String>,
+    language: Option<String>,
+    issues: Option<bool>,
+    wiki: Option<bool>,
+    website: Option<String>,
+    main_branch: Option<String>,
+}
+
+/// Build the creation request for `repo create` from its command-line flags.
+///
+/// An explicit --fork-policy wins; otherwise public repositories default to
+/// `allow_forks` and private ones to `no_public_forks`. --issues and --wiki
+/// override the request defaults (issues on, wiki off).
+fn build_create_request(flags: CreateFlags) -> CreateRepositoryRequest {
+    let defaults = CreateRepositoryRequest::default();
+
+    let fork_policy = flags.fork_policy.unwrap_or_else(|| {
+        if flags.public {
+            "allow_forks".to_string()
+        } else {
+            "no_public_forks".to_string()
+        }
+    });
+
+    CreateRepositoryRequest {
+        scm: "git".to_string(),
+        name: Some(flags.name),
+        description: flags.description,
+        is_private: Some(!flags.public),
+        project: flags.project.map(|key| crate::models::ProjectKey { key }),
+        fork_policy: Some(fork_policy),
+        language: flags.language,
+        has_issues: flags.issues.or(defaults.has_issues),
+        has_wiki: flags.wiki.or(defaults.has_wiki),
+        website: flags.website,
+        mainbranch: flags.main_branch.map(|name| crate::models::Branch {
+            name,
+            branch_type: None,
+        }),
     }
 }
 
@@ -662,6 +1042,7 @@ struct UpdateFlags {
     fork_policy: Option<String>,
     issues: Option<bool>,
     wiki: Option<bool>,
+    website: Option<String>,
     main_branch: Option<String>,
 }
 
@@ -681,6 +1062,7 @@ fn build_update_request(flags: UpdateFlags) -> UpdateRepositoryRequest {
         fork_policy: flags.fork_policy,
         has_issues: flags.issues,
         has_wiki: flags.wiki,
+        website: flags.website,
         project: None,
         mainbranch: flags.main_branch.map(|name| crate::models::Branch {
             name,
@@ -689,21 +1071,7 @@ fn build_update_request(flags: UpdateFlags) -> UpdateRepositoryRequest {
     }
 }
 
-/// Ask the user to confirm a destructive action; on decline, print "Aborted"
-/// and return Ok(false).
-fn confirm_or_abort(prompt: String) -> Result<bool> {
-    use dialoguer::Confirm;
-    let confirmed = Confirm::new()
-        .with_prompt(prompt)
-        .default(false)
-        .interact()?;
-
-    if !confirmed {
-        println!("Aborted");
-    }
-
-    Ok(confirmed)
-}
+use super::confirm_or_abort;
 
 /// Extract the file name (final path component) from a path, for use as the
 /// uploaded artifact name.
@@ -714,40 +1082,9 @@ fn upload_name_for(path: &Path) -> Result<String> {
         .with_context(|| format!("Could not determine a file name for '{}'", path.display()))
 }
 
-/// Format a byte count into a short human-readable string.
-fn format_size(bytes: u64) -> String {
-    const UNITS: [&str; 5] = ["B", "KB", "MB", "GB", "TB"];
-    let mut size = bytes as f64;
-    let mut unit = 0;
-    while size >= 1024.0 && unit < UNITS.len() - 1 {
-        size /= 1024.0;
-        unit += 1;
-    }
-    if unit == 0 {
-        format!("{} {}", bytes, UNITS[unit])
-    } else {
-        format!("{:.1} {}", size, UNITS[unit])
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn format_size_uses_bytes_below_1k() {
-        assert_eq!(format_size(0), "0 B");
-        assert_eq!(format_size(512), "512 B");
-        assert_eq!(format_size(1023), "1023 B");
-    }
-
-    #[test]
-    fn format_size_scales_to_larger_units() {
-        assert_eq!(format_size(1024), "1.0 KB");
-        assert_eq!(format_size(1536), "1.5 KB");
-        assert_eq!(format_size(1024 * 1024), "1.0 MB");
-        assert_eq!(format_size(5 * 1024 * 1024 * 1024), "5.0 GB");
-    }
 
     #[test]
     fn upload_name_takes_final_component() {
@@ -786,6 +1123,84 @@ mod tests {
         });
         let branch = request.mainbranch.expect("mainbranch should be set");
         assert_eq!(branch.name, "develop");
+        assert_eq!(branch.branch_type, None);
+    }
+
+    #[test]
+    fn build_update_request_maps_website() {
+        let request = build_update_request(UpdateFlags {
+            website: Some("https://example.com".to_string()),
+            ..Default::default()
+        });
+        assert_eq!(request.website.as_deref(), Some("https://example.com"));
+    }
+
+    #[test]
+    fn build_create_request_keeps_defaults_without_flags() {
+        let request = build_create_request(CreateFlags {
+            name: "widgets".to_string(),
+            ..Default::default()
+        });
+
+        assert_eq!(request.name.as_deref(), Some("widgets"));
+        assert_eq!(request.is_private, Some(true));
+        assert_eq!(request.fork_policy.as_deref(), Some("no_public_forks"));
+        // Defaults from CreateRepositoryRequest::default(): issues on, wiki off.
+        assert_eq!(request.has_issues, Some(true));
+        assert_eq!(request.has_wiki, Some(false));
+        assert_eq!(request.website, None);
+        assert!(request.mainbranch.is_none());
+    }
+
+    #[test]
+    fn build_create_request_flags_override_issue_and_wiki_defaults() {
+        let request = build_create_request(CreateFlags {
+            name: "widgets".to_string(),
+            issues: Some(false),
+            wiki: Some(true),
+            ..Default::default()
+        });
+
+        assert_eq!(request.has_issues, Some(false));
+        assert_eq!(request.has_wiki, Some(true));
+    }
+
+    #[test]
+    fn build_create_request_public_defaults_to_allow_forks() {
+        let request = build_create_request(CreateFlags {
+            name: "widgets".to_string(),
+            public: true,
+            ..Default::default()
+        });
+
+        assert_eq!(request.is_private, Some(false));
+        assert_eq!(request.fork_policy.as_deref(), Some("allow_forks"));
+    }
+
+    #[test]
+    fn build_create_request_explicit_fork_policy_wins() {
+        let request = build_create_request(CreateFlags {
+            name: "widgets".to_string(),
+            public: true,
+            fork_policy: Some("no_forks".to_string()),
+            ..Default::default()
+        });
+
+        assert_eq!(request.fork_policy.as_deref(), Some("no_forks"));
+    }
+
+    #[test]
+    fn build_create_request_maps_website_and_main_branch() {
+        let request = build_create_request(CreateFlags {
+            name: "widgets".to_string(),
+            website: Some("https://example.com".to_string()),
+            main_branch: Some("trunk".to_string()),
+            ..Default::default()
+        });
+
+        assert_eq!(request.website.as_deref(), Some("https://example.com"));
+        let branch = request.mainbranch.expect("mainbranch should be set");
+        assert_eq!(branch.name, "trunk");
         assert_eq!(branch.branch_type, None);
     }
 }

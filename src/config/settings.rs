@@ -110,8 +110,6 @@ pub struct Config {
     pub auth: AuthConfig,
     #[serde(default)]
     pub defaults: DefaultsConfig,
-    #[serde(default)]
-    pub display: DisplayConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -123,22 +121,6 @@ pub struct AuthConfig {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct DefaultsConfig {
     pub workspace: Option<String>,
-    pub repository: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DisplayConfig {
-    pub color: bool,
-    pub pager: bool,
-}
-
-impl Default for DisplayConfig {
-    fn default() -> Self {
-        Self {
-            color: true,
-            pager: true,
-        }
-    }
 }
 
 impl Config {
@@ -230,8 +212,9 @@ impl Config {
     /// Get the default workspace
     ///
     /// `[auth] default_workspace` is the primary source; `[defaults] workspace`
-    /// remains as a legacy fallback. Remove the fallback (and the
-    /// `defaults.workspace` field) in the first release after 1.0.
+    /// remains as a legacy fallback. Removing the fallback (and the
+    /// `defaults.workspace` field) is a breaking change, so it must wait for
+    /// the next major release (2.0.0).
     pub fn default_workspace(&self) -> Option<&str> {
         self.auth
             .default_workspace
@@ -255,7 +238,7 @@ mod tests {
     fn test_default_config() {
         let config = Config::default();
         assert!(config.auth.username.is_none());
-        assert!(config.display.color);
+        assert!(config.defaults.workspace.is_none());
     }
 
     #[test]
@@ -263,7 +246,7 @@ mod tests {
         let config = Config::default();
         let serialized = toml::to_string(&config).unwrap();
         let deserialized: Config = toml::from_str(&serialized).unwrap();
-        assert_eq!(config.display.color, deserialized.display.color);
+        assert_eq!(config.auth.username, deserialized.auth.username);
     }
 
     #[test]

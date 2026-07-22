@@ -116,7 +116,7 @@ import { CommonModule } from '@angular/common';
             <code class="text-[var(--color-bitbucket-blue-light)] font-mono">bitbucket --version</code>
           </div>
           <p class="text-[var(--color-neutral-400)] text-sm">
-            You should see output like: <code class="bg-[var(--color-neutral-20)] px-2 py-0.5 rounded text-[var(--color-neutral-700)]">bitbucket 0.4.0</code>
+            You should see output like: <code class="bg-[var(--color-neutral-20)] px-2 py-0.5 rounded text-[var(--color-neutral-700)]">bitbucket 1.0.0</code>
           </p>
         </div>
       </section>

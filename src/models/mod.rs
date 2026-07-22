@@ -1,11 +1,19 @@
+pub mod commit;
+pub mod deploy;
 pub mod issue;
 pub mod pipeline;
 pub mod pr;
+pub mod project;
 pub mod repo;
 pub mod user;
+pub mod webhook;
 
+pub use commit::*;
+pub use deploy::*;
 pub use issue::*;
 pub use pipeline::*;
 pub use pr::*;
+pub use project::*;
 pub use repo::*;
 pub use user::*;
+pub use webhook::*;

@@ -6,11 +6,12 @@ use colored::Colorize;
 
 use cli::{Cli, Commands};
 
-#[tokio::main]
+#[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
 
     cli::set_workspace_override(cli.workspace.clone());
+    cli::set_output_format(cli.output);
 
     let result = match cli.command {
         Commands::Auth { command } => command.run().await,
@@ -19,6 +20,7 @@ async fn main() -> Result<()> {
         Commands::Issue { command } => command.run().await,
         Commands::Pipeline { command } => command.run().await,
         Commands::Workspace { command } => command.run().await,
+        Commands::User { command } => command.run().await,
         Commands::Tui => tui::run_tui(cli.workspace).await,
     };
 

@@ -2,12 +2,35 @@ use anyhow::Result;
 
 use super::BitbucketClient;
 use crate::models::{
-    CreatePullRequestRequest, MergePullRequestRequest, Paginated, PullRequest, PullRequestComment,
-    PullRequestState,
+    CommentRef, CommitStatus, CreatePullRequestRequest, DiffStat, InlineComment,
+    MergePullRequestRequest, Paginated, PrActivity, PrCommit, PrTask, PullRequest,
+    PullRequestComment, PullRequestState, UpdatePullRequestRequest,
 };
 
+/// Server-side filters for [`BitbucketClient::list_pull_requests_filtered`].
+#[derive(Default)]
+pub(crate) struct PrListFilters<'a> {
+    pub states: &'a [PullRequestState],
+    pub query: Option<&'a str>,
+    pub sort: Option<&'a str>,
+    pub page: Option<u32>,
+    pub pagelen: Option<u32>,
+}
+
+/// Input for [`BitbucketClient::add_pr_comment_full`]: the comment body plus
+/// optional inline placement and reply target.
+pub(crate) struct PrCommentInput<'a> {
+    pub content: &'a str,
+    pub path: Option<&'a str>,
+    pub line: Option<u32>,
+    pub parent: Option<u64>,
+}
+
 impl BitbucketClient {
-    /// List pull requests for a repository
+    /// List pull requests for a repository, filtered by at most one state.
+    ///
+    /// Thin wrapper over [`Self::list_pull_requests_filtered`] kept for
+    /// callers (e.g. the TUI) that only need the simple form.
     pub async fn list_pull_requests(
         &self,
         workspace: &str,
@@ -16,19 +39,47 @@ impl BitbucketClient {
         page: Option<u32>,
         pagelen: Option<u32>,
     ) -> Result<Paginated<PullRequest>> {
-        let mut query = Vec::new();
+        let states: Vec<PullRequestState> = state.into_iter().collect();
+        self.list_pull_requests_filtered(
+            workspace,
+            repo_slug,
+            PrListFilters {
+                states: &states,
+                page,
+                pagelen,
+                ..Default::default()
+            },
+        )
+        .await
+    }
 
-        if let Some(s) = state {
-            query.push(("state", s.to_string()));
+    /// List pull requests with full filtering: multiple `state` values, a
+    /// BBQL `q` expression, a `sort` field, and explicit paging.
+    pub(crate) async fn list_pull_requests_filtered(
+        &self,
+        workspace: &str,
+        repo_slug: &str,
+        filters: PrListFilters<'_>,
+    ) -> Result<Paginated<PullRequest>> {
+        let mut params = Vec::new();
+
+        for state in filters.states {
+            params.push(("state", state.to_string()));
         }
-        if let Some(p) = page {
-            query.push(("page", p.to_string()));
+        if let Some(q) = filters.query {
+            params.push(("q", q.to_string()));
         }
-        if let Some(len) = pagelen {
-            query.push(("pagelen", len.to_string()));
+        if let Some(s) = filters.sort {
+            params.push(("sort", s.to_string()));
+        }
+        if let Some(p) = filters.page {
+            params.push(("page", p.to_string()));
+        }
+        if let Some(len) = filters.pagelen {
+            params.push(("pagelen", len.to_string()));
         }
 
-        let query_refs: Vec<(&str, &str)> = query.iter().map(|(k, v)| (*k, v.as_str())).collect();
+        let query_refs: Vec<(&str, &str)> = params.iter().map(|(k, v)| (*k, v.as_str())).collect();
 
         let path = format!("/repositories/{}/{}/pullrequests", workspace, repo_slug);
         self.get_with_query(&path, &query_refs).await
@@ -59,33 +110,19 @@ impl BitbucketClient {
         self.post(&path, request).await
     }
 
-    /// Update a pull request
+    /// Update a pull request; only the fields set on `request` are changed.
     pub async fn update_pull_request(
         &self,
         workspace: &str,
         repo_slug: &str,
         pr_id: u64,
-        title: Option<&str>,
-        description: Option<&str>,
+        request: &UpdatePullRequestRequest,
     ) -> Result<PullRequest> {
-        #[derive(serde::Serialize)]
-        struct UpdateRequest {
-            #[serde(skip_serializing_if = "Option::is_none")]
-            title: Option<String>,
-            #[serde(skip_serializing_if = "Option::is_none")]
-            description: Option<String>,
-        }
-
-        let request = UpdateRequest {
-            title: title.map(|t| t.to_string()),
-            description: description.map(|d| d.to_string()),
-        };
-
         let path = format!(
             "/repositories/{}/{}/pullrequests/{}",
             workspace, repo_slug, pr_id
         );
-        self.put(&path, &request).await
+        self.put(&path, request).await
     }
 
     /// Merge a pull request
@@ -129,6 +166,34 @@ impl BitbucketClient {
     ) -> Result<()> {
         let path = format!(
             "/repositories/{}/{}/pullrequests/{}/approve",
+            workspace, repo_slug, pr_id
+        );
+        self.delete(&path).await
+    }
+
+    /// Request changes on a pull request
+    pub async fn request_pr_changes(
+        &self,
+        workspace: &str,
+        repo_slug: &str,
+        pr_id: u64,
+    ) -> Result<()> {
+        let path = format!(
+            "/repositories/{}/{}/pullrequests/{}/request-changes",
+            workspace, repo_slug, pr_id
+        );
+        self.post_no_response(&path, &serde_json::json!({})).await
+    }
+
+    /// Withdraw a previous request for changes on a pull request
+    pub async fn unrequest_pr_changes(
+        &self,
+        workspace: &str,
+        repo_slug: &str,
+        pr_id: u64,
+    ) -> Result<()> {
+        let path = format!(
+            "/repositories/{}/{}/pullrequests/{}/request-changes",
             workspace, repo_slug, pr_id
         );
         self.delete(&path).await
@@ -191,17 +256,22 @@ impl BitbucketClient {
         self.get(&path).await
     }
 
-    /// Add a comment to a pull request
-    pub async fn add_pr_comment(
+    /// Add a comment to a pull request, optionally inline (`path` + `line`)
+    /// and/or as a reply to `parent`.
+    pub(crate) async fn add_pr_comment_full(
         &self,
         workspace: &str,
         repo_slug: &str,
         pr_id: u64,
-        content: &str,
+        input: PrCommentInput<'_>,
     ) -> Result<PullRequestComment> {
         #[derive(serde::Serialize)]
         struct CommentRequest {
             content: ContentRequest,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            inline: Option<InlineComment>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            parent: Option<CommentRef>,
         }
 
         #[derive(serde::Serialize)]
@@ -211,15 +281,84 @@ impl BitbucketClient {
 
         let request = CommentRequest {
             content: ContentRequest {
-                raw: content.to_string(),
+                raw: input.content.to_string(),
             },
+            inline: input.path.map(|p| InlineComment {
+                from: None,
+                to: input.line,
+                path: p.to_string(),
+            }),
+            parent: input.parent.map(|id| CommentRef { id }),
         };
 
-        let path = format!(
+        let api_path = format!(
             "/repositories/{}/{}/pullrequests/{}/comments",
             workspace, repo_slug, pr_id
         );
-        self.post(&path, &request).await
+        self.post(&api_path, &request).await
+    }
+
+    /// Update the content of an existing pull request comment
+    pub async fn update_pr_comment(
+        &self,
+        workspace: &str,
+        repo_slug: &str,
+        pr_id: u64,
+        comment_id: u64,
+        content: &str,
+    ) -> Result<PullRequestComment> {
+        let request = serde_json::json!({ "content": { "raw": content } });
+
+        let path = format!(
+            "/repositories/{}/{}/pullrequests/{}/comments/{}",
+            workspace, repo_slug, pr_id, comment_id
+        );
+        self.put(&path, &request).await
+    }
+
+    /// Delete a pull request comment
+    pub async fn delete_pr_comment(
+        &self,
+        workspace: &str,
+        repo_slug: &str,
+        pr_id: u64,
+        comment_id: u64,
+    ) -> Result<()> {
+        let path = format!(
+            "/repositories/{}/{}/pullrequests/{}/comments/{}",
+            workspace, repo_slug, pr_id, comment_id
+        );
+        self.delete(&path).await
+    }
+
+    /// Resolve a pull request comment thread
+    pub async fn resolve_pr_comment(
+        &self,
+        workspace: &str,
+        repo_slug: &str,
+        pr_id: u64,
+        comment_id: u64,
+    ) -> Result<()> {
+        let path = format!(
+            "/repositories/{}/{}/pullrequests/{}/comments/{}/resolve",
+            workspace, repo_slug, pr_id, comment_id
+        );
+        self.post_no_response(&path, &serde_json::json!({})).await
+    }
+
+    /// Reopen (unresolve) a pull request comment thread
+    pub async fn unresolve_pr_comment(
+        &self,
+        workspace: &str,
+        repo_slug: &str,
+        pr_id: u64,
+        comment_id: u64,
+    ) -> Result<()> {
+        let path = format!(
+            "/repositories/{}/{}/pullrequests/{}/comments/{}/resolve",
+            workspace, repo_slug, pr_id, comment_id
+        );
+        self.delete(&path).await
     }
 
     /// Get the diff for a pull request
@@ -235,6 +374,186 @@ impl BitbucketClient {
         );
 
         self.get_text(&path, Some("text/plain")).await
+    }
+
+    /// Get the patch (mbox-style) for a pull request
+    pub async fn get_pr_patch(
+        &self,
+        workspace: &str,
+        repo_slug: &str,
+        pr_id: u64,
+    ) -> Result<String> {
+        let path = format!(
+            "/repositories/{}/{}/pullrequests/{}/patch",
+            workspace, repo_slug, pr_id
+        );
+
+        self.get_text(&path, None).await
+    }
+
+    /// List one page of commits on a pull request
+    pub async fn list_pr_commits(
+        &self,
+        workspace: &str,
+        repo_slug: &str,
+        pr_id: u64,
+        pagelen: Option<u32>,
+    ) -> Result<Paginated<PrCommit>> {
+        let path = format!(
+            "/repositories/{}/{}/pullrequests/{}/commits",
+            workspace, repo_slug, pr_id
+        );
+
+        match pagelen {
+            Some(len) => {
+                let len = len.to_string();
+                self.get_with_query(&path, &[("pagelen", len.as_str())])
+                    .await
+            }
+            None => self.get(&path).await,
+        }
+    }
+
+    /// List all commit statuses (builds) for a pull request's head commit
+    pub async fn list_pr_statuses(
+        &self,
+        workspace: &str,
+        repo_slug: &str,
+        pr_id: u64,
+    ) -> Result<Vec<CommitStatus>> {
+        let path = format!(
+            "/repositories/{}/{}/pullrequests/{}/statuses",
+            workspace, repo_slug, pr_id
+        );
+        self.get_all_pages(&path).await
+    }
+
+    /// Get one page of the diffstat (per-file change summary) for a pull request
+    pub async fn get_pr_diffstat(
+        &self,
+        workspace: &str,
+        repo_slug: &str,
+        pr_id: u64,
+        pagelen: Option<u32>,
+    ) -> Result<Paginated<DiffStat>> {
+        let path = format!(
+            "/repositories/{}/{}/pullrequests/{}/diffstat",
+            workspace, repo_slug, pr_id
+        );
+
+        match pagelen {
+            Some(len) => {
+                let len = len.to_string();
+                self.get_with_query(&path, &[("pagelen", len.as_str())])
+                    .await
+            }
+            None => self.get(&path).await,
+        }
+    }
+
+    /// List all tasks on a pull request
+    pub async fn list_pr_tasks(
+        &self,
+        workspace: &str,
+        repo_slug: &str,
+        pr_id: u64,
+    ) -> Result<Vec<PrTask>> {
+        let path = format!(
+            "/repositories/{}/{}/pullrequests/{}/tasks",
+            workspace, repo_slug, pr_id
+        );
+        self.get_all_pages(&path).await
+    }
+
+    /// Create a task on a pull request
+    pub async fn add_pr_task(
+        &self,
+        workspace: &str,
+        repo_slug: &str,
+        pr_id: u64,
+        content: &str,
+    ) -> Result<PrTask> {
+        let request = serde_json::json!({ "content": { "raw": content } });
+
+        let path = format!(
+            "/repositories/{}/{}/pullrequests/{}/tasks",
+            workspace, repo_slug, pr_id
+        );
+        self.post(&path, &request).await
+    }
+
+    /// Update a pull request task's content and/or state
+    /// (`state` is `"RESOLVED"` or `"UNRESOLVED"`).
+    pub async fn update_pr_task(
+        &self,
+        workspace: &str,
+        repo_slug: &str,
+        pr_id: u64,
+        task_id: u64,
+        content: Option<&str>,
+        state: Option<&str>,
+    ) -> Result<PrTask> {
+        #[derive(serde::Serialize)]
+        struct TaskUpdateRequest {
+            #[serde(skip_serializing_if = "Option::is_none")]
+            content: Option<TaskContentRequest>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            state: Option<String>,
+        }
+
+        #[derive(serde::Serialize)]
+        struct TaskContentRequest {
+            raw: String,
+        }
+
+        let request = TaskUpdateRequest {
+            content: content.map(|c| TaskContentRequest { raw: c.to_string() }),
+            state: state.map(|s| s.to_string()),
+        };
+
+        let path = format!(
+            "/repositories/{}/{}/pullrequests/{}/tasks/{}",
+            workspace, repo_slug, pr_id, task_id
+        );
+        self.put(&path, &request).await
+    }
+
+    /// Delete a pull request task
+    pub async fn delete_pr_task(
+        &self,
+        workspace: &str,
+        repo_slug: &str,
+        pr_id: u64,
+        task_id: u64,
+    ) -> Result<()> {
+        let path = format!(
+            "/repositories/{}/{}/pullrequests/{}/tasks/{}",
+            workspace, repo_slug, pr_id, task_id
+        );
+        self.delete(&path).await
+    }
+
+    /// List one page of the activity feed for a pull request
+    pub async fn list_pr_activity(
+        &self,
+        workspace: &str,
+        repo_slug: &str,
+        pr_id: u64,
+        pagelen: Option<u32>,
+    ) -> Result<Paginated<PrActivity>> {
+        let path = format!(
+            "/repositories/{}/{}/pullrequests/{}/activity",
+            workspace, repo_slug, pr_id
+        );
+
+        match pagelen {
+            Some(len) => {
+                let len = len.to_string();
+                self.get_with_query(&path, &[("pagelen", len.as_str())])
+                    .await
+            }
+            None => self.get(&path).await,
+        }
     }
 }
 

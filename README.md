@@ -113,10 +113,10 @@ You'll need to create an OAuth consumer first:
 bitbucket auth login --api-key
 ```
 
-You'll need to create an HTTP access token:
-1. Go to [Personal settings → HTTP access tokens](https://bitbucket.org/account/settings/app-passwords/)
-2. Create a new token with required permissions
-3. Enter your username and token when prompted
+You'll need to create an API token:
+1. Go to your [Bitbucket personal settings](https://bitbucket.org/account/settings/) and open the API tokens section
+2. Create a new token with the required permissions
+3. Enter your Atlassian account email and token when prompted (or pass `--email` and `--token` for non-interactive use)
 
 **Note:** App passwords are deprecated by Atlassian. OAuth 2.0 is the preferred method.
 
@@ -143,16 +143,31 @@ bitbucket repo download upload myworkspace/myrepo screenshot.png
 bitbucket tui --workspace myworkspace
 ```
 
+### Scripting
+
+Every command accepts a global `--output` flag. The default (`table`) prints
+human-readable tables; `--output json` emits the raw data as pretty-printed
+JSON for piping into `jq` or scripts:
+
+```bash
+# IDs and titles of open pull requests
+bitbucket pr list myworkspace/myrepo --output json | jq -r '.[] | "\(.id)\t\(.title)"'
+
+# Machine-readable repository details
+bitbucket repo view myworkspace/myrepo --output json
+```
+
 ## 📖 Commands
 
 | Command | Description |
 |---------|-------------|
 | `bitbucket auth` | Manage authentication (login, logout, status) |
-| `bitbucket repo` | Manage repositories (list, view, clone, create, update, move, fork, delete, download) |
-| `bitbucket pr` | Manage pull requests (list, view, create, merge, approve, decline, checkout, diff, comment, list-comments, view-comment, pipelines) |
-| `bitbucket issue` | Manage issues (list, view, create, comment, close, reopen) |
-| `bitbucket pipeline` | Manage pipelines (list, view, trigger, stop) |
-| `bitbucket workspace` | Manage workspaces (list) |
+| `bitbucket repo` | Manage repositories (list, view, clone, create, update, move, fork, delete, watchers, forks, downloads), plus branch/tag/commit/file browsing, webhooks, branch restrictions, default reviewers, permissions, deploy keys, environments, deployments, and the branching model |
+| `bitbucket pr` | Manage pull requests (list, view, create, edit, merge, approve/unapprove, request-changes, decline, checkout, diff/diffstat, patch, commits, statuses, activity, pipelines), plus comments and tasks |
+| `bitbucket issue` | Manage issues (list, view, create, edit, delete, close, reopen, vote, watch), plus comments, attachments, change log, and tracker components/milestones/versions |
+| `bitbucket pipeline` | Manage pipelines (list, view, trigger, rerun, stop, config), plus repository and workspace variables, schedules, and caches |
+| `bitbucket workspace` | Manage workspaces (list, view, members, permissions) and their projects |
+| `bitbucket user` | Inspect user accounts (whoami, view, emails) |
 | `bitbucket tui` | Launch interactive terminal UI |
 
 ## 🖥️ TUI Mode

@@ -95,17 +95,31 @@ import { CommonModule } from '@angular/common';
 })
 export class PrCommandComponent {
   subcommands = [
-    { name: 'list', description: 'List pull requests for a repository' },
+    { name: 'list', description: 'List pull requests (repeatable --state, -q/--query, --sort, --page, --limit)' },
     { name: 'view', description: 'View pull request details' },
-    { name: 'create', description: 'Create a new pull request' },
+    { name: 'create', description: 'Create a new pull request (--title, --source, --destination, --body, --close-source-branch, --reviewers)' },
+    { name: 'edit', description: 'Edit an existing pull request (--title, --body, --reviewers, --destination)' },
     { name: 'merge', description: 'Merge a pull request' },
     { name: 'approve', description: 'Approve a pull request' },
+    { name: 'unapprove', description: 'Remove your approval from a pull request' },
+    { name: 'request-changes', description: 'Request changes on a pull request' },
+    { name: 'unrequest-changes', description: 'Withdraw your request for changes' },
     { name: 'decline', description: 'Decline a pull request' },
-    { name: 'checkout', description: 'Checkout a PR branch locally' },
+    { name: 'checkout', description: 'Checkout a PR branch locally (verifies the origin remote and fast-forwards stale branches)' },
     { name: 'diff', description: 'View the diff for a pull request' },
-    { name: 'comment', description: 'Add a comment to a pull request' },
+    { name: 'diffstat', description: 'Show the per-file change summary' },
+    { name: 'patch', description: 'Print the patch (mbox-style) for a pull request' },
+    { name: 'commits', description: 'List commits on a pull request' },
+    { name: 'statuses', description: 'Show build statuses for a pull request' },
+    { name: 'activity', description: 'Show the activity feed for a pull request' },
+    { name: 'comment', description: 'Add a comment (--path/--line for inline, --parent for replies)' },
+    { name: 'edit-comment', description: 'Edit a comment on a pull request' },
+    { name: 'delete-comment', description: 'Delete a comment on a pull request' },
+    { name: 'resolve-comment', description: 'Resolve a comment thread' },
+    { name: 'unresolve-comment', description: 'Reopen a resolved comment thread' },
     { name: 'list-comments', description: 'List comments on a pull request' },
     { name: 'view-comment', description: 'View a specific comment on a pull request' },
+    { name: 'task', description: 'Manage tasks on a pull request (list, add, resolve, reopen, delete)' },
     { name: 'pipelines', description: "List pipelines for the PR's head commit" },
   ];
 
@@ -116,19 +130,34 @@ export class PrCommandComponent {
       description: 'Lists all open pull requests in the specified repository.'
     },
     {
-      title: 'Create a pull request',
-      command: 'bitbucket pr create myworkspace/myrepo --title "Add feature" --source feature-branch --destination main',
-      description: 'Creates a new pull request from feature-branch to main.'
+      title: 'List merged and declined pull requests',
+      command: 'bitbucket pr list myworkspace/myrepo --state merged --state declined',
+      description: 'The --state flag is repeatable to match several states at once.'
     },
     {
-      title: 'View pull request details',
-      command: 'bitbucket pr view myworkspace/myrepo 42',
-      description: 'Shows detailed information about PR #42.'
+      title: 'Create a pull request with reviewers',
+      command: 'bitbucket pr create myworkspace/myrepo --title "Add feature" --source feature-branch --destination main --reviewers alice,bob',
+      description: 'Creates a new pull request from feature-branch to main and assigns reviewers.'
+    },
+    {
+      title: 'Edit a pull request',
+      command: 'bitbucket pr edit myworkspace/myrepo 42 --title "New title" --destination develop',
+      description: 'Updates only the fields you pass; everything else is left unchanged.'
     },
     {
       title: 'Merge a pull request',
       command: 'bitbucket pr merge myworkspace/myrepo 42 --strategy squash',
       description: 'Merges PR #42 using squash merge strategy.'
+    },
+    {
+      title: 'Leave an inline comment',
+      command: 'bitbucket pr comment myworkspace/myrepo 42 --body "Typo here" --path src/main.rs --line 10',
+      description: 'Attaches the comment to line 10 of src/main.rs in the diff.'
+    },
+    {
+      title: 'Add a task to a pull request',
+      command: 'bitbucket pr task add myworkspace/myrepo 42 --body "Update the changelog"',
+      description: 'Tasks can then be resolved, reopened, or deleted with pr task resolve/reopen/delete.'
     },
     {
       title: 'Checkout PR locally',
@@ -138,9 +167,13 @@ export class PrCommandComponent {
   ];
 
   options = [
-    { flag: '--state <STATE>', description: 'Filter by state (open, merged, declined, superseded)' },
+    { flag: '--state <STATE>', description: 'Filter by state (open, merged, declined, superseded); repeatable' },
+    { flag: '-q, --query <QUERY>', description: 'Filter with a Bitbucket query (BBQL) expression' },
+    { flag: '--sort <FIELD>', description: 'Sort field, prefix with - for descending (e.g. -updated_on)' },
+    { flag: '--page <N>', description: 'Page number to fetch' },
     { flag: '--limit <N>', description: 'Number of results to show (default: 25)' },
     { flag: '--web', description: 'Open in browser instead of showing in terminal' },
     { flag: '--strategy <STRATEGY>', description: 'Merge strategy (merge-commit, squash, fast-forward)' },
+    { flag: '--reviewers <USERS>', description: 'Comma-separated reviewer usernames (create/edit)' },
   ];
 }

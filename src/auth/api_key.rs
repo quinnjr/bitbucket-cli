@@ -102,14 +102,18 @@ impl ApiKeyAuth {
 
     /// Validate credentials against the Bitbucket API
     async fn validate_credentials(credential: &Credential) -> Result<()> {
-        let client = reqwest::Client::new();
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(30))
+            .connect_timeout(std::time::Duration::from_secs(10))
+            .user_agent(crate::api::client::USER_AGENT)
+            .build()
+            .context("Failed to create HTTP client")?;
 
         println!("🔍 Validating credentials with Bitbucket API...");
 
         let response = client
             .get("https://api.bitbucket.org/2.0/user")
             .header("Authorization", credential.auth_header())
-            .header("User-Agent", "bitbucket-cli/0.3.0")
             .send()
             .await
             .context("Failed to connect to Bitbucket API")?;
