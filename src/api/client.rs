@@ -7,6 +7,9 @@ use crate::models::Paginated;
 
 const API_BASE_URL: &str = "https://api.bitbucket.org/2.0";
 
+/// User-Agent header sent with every request, versioned from Cargo metadata.
+pub(crate) const USER_AGENT: &str = concat!("bitbucket-cli/", env!("CARGO_PKG_VERSION"));
+
 /// Bitbucket API client
 #[derive(Clone)]
 pub struct BitbucketClient {
@@ -18,18 +21,13 @@ impl BitbucketClient {
     /// Create a new authenticated client
     pub fn new(credential: Credential) -> Result<Self> {
         let client = Client::builder()
-            .user_agent("bitbucket-cli")
+            .user_agent(USER_AGENT)
             .timeout(std::time::Duration::from_secs(30))
             .connect_timeout(std::time::Duration::from_secs(10))
             .build()
             .context("Failed to create HTTP client")?;
 
         Ok(Self { client, credential })
-    }
-
-    /// Get the authorization header value
-    pub fn auth_header(&self) -> String {
-        self.credential.auth_header()
     }
 
     /// Create a client from stored credentials, automatically refreshing if needed
@@ -65,11 +63,6 @@ impl BitbucketClient {
         };
 
         Self::new(credential)
-    }
-
-    /// Get the base API URL
-    pub fn base_url(&self) -> &str {
-        API_BASE_URL
     }
 
     /// Build a URL for an API endpoint
@@ -138,6 +131,28 @@ impl BitbucketClient {
         if status.is_success() {
             response
                 .text()
+                .await
+                .context("Failed to read response body")
+        } else {
+            self.handle_error(status, response).await
+        }
+    }
+
+    /// Make a GET request that returns the raw response body as bytes
+    pub(crate) async fn get_bytes(&self, path: &str) -> Result<bytes::Bytes> {
+        let response = self
+            .client
+            .get(self.url(path))
+            .header("Authorization", self.credential.auth_header())
+            .send()
+            .await
+            .context("Request failed")?;
+
+        let status = response.status();
+
+        if status.is_success() {
+            response
+                .bytes()
                 .await
                 .context("Failed to read response body")
         } else {

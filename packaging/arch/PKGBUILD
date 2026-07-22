@@ -1,6 +1,6 @@
 # Maintainer: Pegasus Heavy Industries
 pkgname=bitbucket-cli
-pkgver=0.4.0
+pkgver=1.0.0
 pkgrel=1
 pkgdesc="A powerful command-line interface for Bitbucket Cloud"
 arch=('x86_64' 'aarch64')

@@ -1,10 +1,26 @@
 use anyhow::Result;
 
 use super::BitbucketClient;
-use crate::models::{Paginated, Pipeline, PipelineStep, TriggerPipelineRequest};
+use crate::models::{
+    Paginated, Pipeline, PipelineCache, PipelineSchedule, PipelineStep, PipelineVariable,
+    PipelineVariableInput, PipelinesConfig, TriggerPipelineRequest,
+};
+
+/// Server-side filters for [`BitbucketClient::list_pipelines_filtered`].
+#[derive(Default)]
+pub(crate) struct PipelineListFilters<'a> {
+    pub page: Option<u32>,
+    pub pagelen: Option<u32>,
+    pub status: Option<&'a str>,
+    pub target_branch: Option<&'a str>,
+    pub sort: Option<&'a str>,
+}
 
 impl BitbucketClient {
-    /// List pipelines for a repository
+    /// List pipelines for a repository, sorted by most recent first.
+    ///
+    /// Thin wrapper over [`Self::list_pipelines_filtered`] kept for the TUI
+    /// and the build-number/commit lookups, which need no server-side filters.
     pub async fn list_pipelines(
         &self,
         workspace: &str,
@@ -12,18 +28,30 @@ impl BitbucketClient {
         page: Option<u32>,
         pagelen: Option<u32>,
     ) -> Result<Paginated<Pipeline>> {
-        let mut query = Vec::new();
+        self.list_pipelines_filtered(
+            workspace,
+            repo_slug,
+            PipelineListFilters {
+                page,
+                pagelen,
+                ..Default::default()
+            },
+        )
+        .await
+    }
 
-        // Sort by created_on descending to get most recent first
-        query.push(("sort", "-created_on".to_string()));
-
-        if let Some(p) = page {
-            query.push(("page", p.to_string()));
-        }
-        if let Some(len) = pagelen {
-            query.push(("pagelen", len.to_string()));
-        }
-
+    /// List pipelines with optional server-side filters.
+    ///
+    /// `status` filters on pipeline state (e.g. `PENDING`, `IN_PROGRESS`,
+    /// `COMPLETED`), `target_branch` on the target branch name, and `sort`
+    /// overrides the default `-created_on` (most recent first) ordering.
+    pub(crate) async fn list_pipelines_filtered(
+        &self,
+        workspace: &str,
+        repo_slug: &str,
+        filters: PipelineListFilters<'_>,
+    ) -> Result<Paginated<Pipeline>> {
+        let query = pipeline_list_params(&filters);
         let query_refs: Vec<(&str, &str)> = query.iter().map(|(k, v)| (*k, v.as_str())).collect();
 
         let path = format!("/repositories/{}/{}/pipelines", workspace, repo_slug);
@@ -163,6 +191,271 @@ impl BitbucketClient {
         )
         .await
     }
+
+    // ---- Repository pipeline variables -----------------------------------
+
+    /// List all pipeline variables configured on a repository.
+    pub async fn list_pipeline_variables(
+        &self,
+        workspace: &str,
+        repo_slug: &str,
+    ) -> Result<Vec<PipelineVariable>> {
+        let path = format!(
+            "/repositories/{}/{}/pipelines_config/variables/",
+            workspace, repo_slug
+        );
+        self.get_all_pages(&path).await
+    }
+
+    /// Create a new pipeline variable on a repository.
+    pub async fn create_pipeline_variable(
+        &self,
+        workspace: &str,
+        repo_slug: &str,
+        variable: &PipelineVariableInput,
+    ) -> Result<PipelineVariable> {
+        let path = format!(
+            "/repositories/{}/{}/pipelines_config/variables/",
+            workspace, repo_slug
+        );
+        self.post(&path, variable).await
+    }
+
+    /// Update an existing pipeline variable on a repository.
+    pub async fn update_pipeline_variable(
+        &self,
+        workspace: &str,
+        repo_slug: &str,
+        variable_uuid: &str,
+        variable: &PipelineVariableInput,
+    ) -> Result<PipelineVariable> {
+        let path = format!(
+            "/repositories/{}/{}/pipelines_config/variables/{}",
+            workspace, repo_slug, variable_uuid
+        );
+        self.put(&path, variable).await
+    }
+
+    /// Delete a pipeline variable from a repository.
+    pub async fn delete_pipeline_variable(
+        &self,
+        workspace: &str,
+        repo_slug: &str,
+        variable_uuid: &str,
+    ) -> Result<()> {
+        let path = format!(
+            "/repositories/{}/{}/pipelines_config/variables/{}",
+            workspace, repo_slug, variable_uuid
+        );
+        self.delete(&path).await
+    }
+
+    // ---- Workspace pipeline variables -------------------------------------
+
+    /// List all workspace-level pipeline variables.
+    ///
+    /// Note the workspace endpoint uses `pipelines-config` (hyphen), unlike
+    /// the repository endpoint's `pipelines_config`.
+    pub async fn list_workspace_pipeline_variables(
+        &self,
+        workspace: &str,
+    ) -> Result<Vec<PipelineVariable>> {
+        let path = format!("/workspaces/{}/pipelines-config/variables/", workspace);
+        self.get_all_pages(&path).await
+    }
+
+    /// Create a new workspace-level pipeline variable.
+    pub async fn create_workspace_pipeline_variable(
+        &self,
+        workspace: &str,
+        variable: &PipelineVariableInput,
+    ) -> Result<PipelineVariable> {
+        let path = format!("/workspaces/{}/pipelines-config/variables/", workspace);
+        self.post(&path, variable).await
+    }
+
+    /// Update an existing workspace-level pipeline variable.
+    pub async fn update_workspace_pipeline_variable(
+        &self,
+        workspace: &str,
+        variable_uuid: &str,
+        variable: &PipelineVariableInput,
+    ) -> Result<PipelineVariable> {
+        let path = format!(
+            "/workspaces/{}/pipelines-config/variables/{}",
+            workspace, variable_uuid
+        );
+        self.put(&path, variable).await
+    }
+
+    /// Delete a workspace-level pipeline variable.
+    pub async fn delete_workspace_pipeline_variable(
+        &self,
+        workspace: &str,
+        variable_uuid: &str,
+    ) -> Result<()> {
+        let path = format!(
+            "/workspaces/{}/pipelines-config/variables/{}",
+            workspace, variable_uuid
+        );
+        self.delete(&path).await
+    }
+
+    // ---- Pipeline schedules ------------------------------------------------
+
+    /// List all pipeline schedules configured on a repository.
+    pub async fn list_pipeline_schedules(
+        &self,
+        workspace: &str,
+        repo_slug: &str,
+    ) -> Result<Vec<PipelineSchedule>> {
+        let path = format!(
+            "/repositories/{}/{}/pipelines_config/schedules/",
+            workspace, repo_slug
+        );
+        self.get_all_pages(&path).await
+    }
+
+    /// Create a pipeline schedule running `branch` on `cron_pattern`.
+    pub async fn create_pipeline_schedule(
+        &self,
+        workspace: &str,
+        repo_slug: &str,
+        branch: &str,
+        cron_pattern: &str,
+    ) -> Result<PipelineSchedule> {
+        let path = format!(
+            "/repositories/{}/{}/pipelines_config/schedules/",
+            workspace, repo_slug
+        );
+        let body = serde_json::json!({
+            "enabled": true,
+            "target": {
+                "type": "pipeline_ref_target",
+                "ref_type": "branch",
+                "ref_name": branch,
+                "selector": {
+                    "type": "branches",
+                    "pattern": branch,
+                },
+            },
+            "cron_pattern": cron_pattern,
+        });
+        self.post(&path, &body).await
+    }
+
+    /// Delete a pipeline schedule from a repository.
+    pub async fn delete_pipeline_schedule(
+        &self,
+        workspace: &str,
+        repo_slug: &str,
+        schedule_uuid: &str,
+    ) -> Result<()> {
+        let path = format!(
+            "/repositories/{}/{}/pipelines_config/schedules/{}",
+            workspace, repo_slug, schedule_uuid
+        );
+        self.delete(&path).await
+    }
+
+    // ---- Pipeline caches ----------------------------------------------------
+
+    /// List dependency caches stored for a repository's pipelines.
+    ///
+    /// Note the caches endpoint uses `pipelines-config` (hyphen), unlike the
+    /// variables/schedules endpoints' `pipelines_config`.
+    pub async fn list_pipeline_caches(
+        &self,
+        workspace: &str,
+        repo_slug: &str,
+    ) -> Result<Vec<PipelineCache>> {
+        let path = format!(
+            "/repositories/{}/{}/pipelines-config/caches/",
+            workspace, repo_slug
+        );
+        self.get_all_pages(&path).await
+    }
+
+    /// Delete a pipeline dependency cache by UUID.
+    pub async fn delete_pipeline_cache(
+        &self,
+        workspace: &str,
+        repo_slug: &str,
+        cache_uuid: &str,
+    ) -> Result<()> {
+        let path = format!(
+            "/repositories/{}/{}/pipelines-config/caches/{}",
+            workspace, repo_slug, cache_uuid
+        );
+        self.delete(&path).await
+    }
+
+    // ---- Pipelines configuration ---------------------------------------------
+
+    /// Get the repository's pipelines configuration (enabled state).
+    pub async fn get_pipelines_config(
+        &self,
+        workspace: &str,
+        repo_slug: &str,
+    ) -> Result<PipelinesConfig> {
+        let path = format!("/repositories/{}/{}/pipelines_config", workspace, repo_slug);
+        self.get(&path).await
+    }
+
+    /// Enable or disable pipelines on a repository.
+    pub async fn update_pipelines_config_enabled(
+        &self,
+        workspace: &str,
+        repo_slug: &str,
+        enabled: bool,
+    ) -> Result<PipelinesConfig> {
+        let path = format!("/repositories/{}/{}/pipelines_config", workspace, repo_slug);
+        self.put(&path, &serde_json::json!({ "enabled": enabled }))
+            .await
+    }
+
+    /// Set the next build number for a repository's pipelines.
+    pub async fn set_pipelines_config_build_number(
+        &self,
+        workspace: &str,
+        repo_slug: &str,
+        next: u64,
+    ) -> Result<()> {
+        let path = format!(
+            "/repositories/{}/{}/pipelines_config/build_number",
+            workspace, repo_slug
+        );
+        let _: serde_json::Value = self
+            .put(&path, &serde_json::json!({ "next": next }))
+            .await?;
+        Ok(())
+    }
+}
+
+/// Assemble the query parameters for a filtered pipeline listing.
+///
+/// `sort` defaults to `-created_on` (most recent first) unless overridden;
+/// `status` is upper-cased to match Bitbucket's enum, and the target-branch
+/// filter is sent under the `target.branch` key the API expects.
+fn pipeline_list_params(filters: &PipelineListFilters<'_>) -> Vec<(&'static str, String)> {
+    let mut query = Vec::new();
+
+    query.push(("sort", filters.sort.unwrap_or("-created_on").to_string()));
+
+    if let Some(status) = filters.status {
+        query.push(("status", status.to_uppercase()));
+    }
+    if let Some(branch) = filters.target_branch {
+        query.push(("target.branch", branch.to_string()));
+    }
+    if let Some(p) = filters.page {
+        query.push(("page", p.to_string()));
+    }
+    if let Some(len) = filters.pagelen {
+        query.push(("pagelen", len.to_string()));
+    }
+
+    query
 }
 
 /// Walk pages of pipelines, newest first, looking for a matching build number.
@@ -224,8 +517,66 @@ mod tests {
 
     use chrono::Utc;
 
-    use super::{commit_hashes_match, find_pipeline_by_build_number};
+    use super::{
+        PipelineListFilters, commit_hashes_match, find_pipeline_by_build_number,
+        pipeline_list_params,
+    };
     use crate::models::{Paginated, Pipeline, PipelineState, PipelineStateName, PipelineTarget};
+
+    fn param<'a>(params: &'a [(&'static str, String)], key: &str) -> Option<&'a str> {
+        params
+            .iter()
+            .find(|(k, _)| *k == key)
+            .map(|(_, v)| v.as_str())
+    }
+
+    #[test]
+    fn params_default_sort_is_created_on_descending() {
+        let params = pipeline_list_params(&PipelineListFilters::default());
+        assert_eq!(param(&params, "sort"), Some("-created_on"));
+    }
+
+    #[test]
+    fn params_sort_override_wins() {
+        let filters = PipelineListFilters {
+            sort: Some("created_on"),
+            ..Default::default()
+        };
+        assert_eq!(
+            param(&pipeline_list_params(&filters), "sort"),
+            Some("created_on")
+        );
+    }
+
+    #[test]
+    fn params_status_is_uppercased() {
+        let filters = PipelineListFilters {
+            status: Some("in_progress"),
+            ..Default::default()
+        };
+        assert_eq!(
+            param(&pipeline_list_params(&filters), "status"),
+            Some("IN_PROGRESS")
+        );
+    }
+
+    #[test]
+    fn params_target_branch_uses_dotted_key() {
+        let filters = PipelineListFilters {
+            target_branch: Some("main"),
+            ..Default::default()
+        };
+        let params = pipeline_list_params(&filters);
+        assert_eq!(param(&params, "target.branch"), Some("main"));
+        // Absent when no branch filter is set.
+        assert_eq!(
+            param(
+                &pipeline_list_params(&PipelineListFilters::default()),
+                "target.branch"
+            ),
+            None
+        );
+    }
 
     fn pipeline(build_number: u64) -> Pipeline {
         Pipeline {

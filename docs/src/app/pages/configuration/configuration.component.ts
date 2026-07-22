@@ -60,13 +60,17 @@ pager = true</code></pre>
           </p>
           <div class="space-y-3">
             <div>
-              <code class="text-[var(--color-bitbucket-blue)] font-mono">-w, --workspace &lt;WORKSPACE&gt;</code>
-              <p class="text-sm text-[var(--color-neutral-400)] mt-1">Override the default workspace</p>
+              <code class="text-[var(--color-bitbucket-blue)] font-mono">--workspace &lt;WORKSPACE&gt;</code>
+              <p class="text-sm text-[var(--color-neutral-400)] mt-1">Workspace to use when omitted from arguments (overrides the configured default)</p>
             </div>
             <div>
-              <code class="text-[var(--color-bitbucket-blue)] font-mono">-r, --repo &lt;REPO&gt;</code>
-              <p class="text-sm text-[var(--color-neutral-400)] mt-1">Override the repository</p>
+              <code class="text-[var(--color-bitbucket-blue)] font-mono">--output &lt;table|json&gt;</code>
+              <p class="text-sm text-[var(--color-neutral-400)] mt-1">Output format for command results. The default, table, prints human-readable tables; json emits raw pretty-printed JSON for piping into jq or scripts</p>
             </div>
+          </div>
+          <div class="bg-[var(--color-neutral-900)] rounded-lg p-4 mt-4">
+            <pre class="text-sm text-[var(--color-neutral-100)] font-mono overflow-x-auto"><code># IDs and titles of open pull requests
+bitbucket pr list myworkspace/myrepo --output json | jq -r '.[] | "\\(.id)\\t\\(.title)"'</code></pre>
           </div>
         </div>
       </section>
@@ -78,7 +82,5 @@ export class ConfigurationComponent {
     { key: 'auth.username', description: 'Your Bitbucket username (set automatically on login)', default: 'none' },
     { key: 'auth.default_workspace', description: 'Default workspace for commands', default: 'none' },
     { key: 'defaults.workspace', description: 'Legacy fallback for the default workspace; auth.default_workspace takes precedence', default: 'none' },
-    { key: 'display.color', description: 'Enable colored output', default: 'true' },
-    { key: 'display.pager', description: 'Use pager for long output', default: 'true' },
   ];
 }

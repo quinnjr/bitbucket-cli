@@ -5,7 +5,7 @@ import { FontAwesomeModule } from '@fortawesome/angular-fontawesome';
 import { IconDefinition } from '@fortawesome/fontawesome-svg-core';
 import {
   faFolder, faCodeBranch, faBug, faBolt, faBuilding, faTerminal, faShieldAlt,
-  faArrowRight, faCopy, faChevronRight, faKey
+  faArrowRight, faCopy, faChevronRight, faKey, faUser
 } from '@fortawesome/free-solid-svg-icons';
 import { faGithub, faBitbucket } from '@fortawesome/free-brands-svg-icons';
 
@@ -177,7 +177,8 @@ export class HomeComponent {
     { name: 'pr', path: '/commands/pr', icon: faCodeBranch, description: 'Manage pull requests' },
     { name: 'issue', path: '/commands/issue', icon: faBug, description: 'Manage issues' },
     { name: 'pipeline', path: '/commands/pipeline', icon: faBolt, description: 'Manage pipelines' },
-    { name: 'workspace', path: '/commands/workspace', icon: faBuilding, description: 'Manage workspaces' },
+    { name: 'workspace', path: '/commands/workspace', icon: faBuilding, description: 'Manage workspaces and their projects' },
+    { name: 'user', path: '/commands/user', icon: faUser, description: 'Inspect Bitbucket user accounts' },
     { name: 'tui', path: '/tui', icon: faTerminal, description: 'Launch the interactive terminal UI' },
   ];
 

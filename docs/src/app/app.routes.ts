@@ -46,6 +46,10 @@ export const routes: Routes = [
     loadComponent: () => import('./pages/commands/workspace/workspace.component').then(m => m.WorkspaceCommandComponent)
   },
   {
+    path: 'commands/user',
+    loadComponent: () => import('./pages/commands/user/user.component').then(m => m.UserCommandComponent)
+  },
+  {
     path: '**',
     loadComponent: () => import('./pages/not-found/not-found.component').then(m => m.NotFoundComponent)
   }

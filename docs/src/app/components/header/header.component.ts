@@ -46,7 +46,7 @@ import { faGithub } from '@fortawesome/free-brands-svg-icons';
           </a>
 
           <span class="hidden sm:inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-[var(--color-bitbucket-blue-50)] text-[var(--color-bitbucket-blue)]">
-            v0.4.0
+            v1.0.0
           </span>
         </div>
       </div>

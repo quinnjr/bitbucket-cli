@@ -1,9 +1,21 @@
+pub mod branch_restrictions;
+pub mod branching_model;
 pub mod client;
+pub mod commits;
+pub mod default_reviewers;
+pub mod deploy;
 pub mod downloads;
 pub mod issues;
+pub mod permissions;
 pub mod pipelines;
+pub mod projects;
 pub mod pullrequests;
+pub mod refs;
 pub mod repos;
+pub mod source;
+pub mod users;
+pub mod util;
+pub mod webhooks;
 pub mod workspaces;
 
 pub use client::*;

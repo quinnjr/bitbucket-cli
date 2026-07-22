@@ -11,16 +11,44 @@ impl BitbucketClient {
         page: Option<u32>,
         pagelen: Option<u32>,
     ) -> Result<Paginated<Repository>> {
-        let mut query = Vec::new();
+        self.list_repositories_filtered(workspace, None, None, None, page, pagelen)
+            .await
+    }
 
+    /// List repositories for a workspace with optional filters.
+    ///
+    /// `role` restricts results to repositories where the caller has at least
+    /// that role (member, contributor, admin, or owner), `query` is a
+    /// Bitbucket query (BBQL) expression passed as the `q` parameter, and
+    /// `sort` names a field to sort by (prefix with `-` for descending).
+    pub async fn list_repositories_filtered(
+        &self,
+        workspace: &str,
+        role: Option<&str>,
+        query: Option<&str>,
+        sort: Option<&str>,
+        page: Option<u32>,
+        pagelen: Option<u32>,
+    ) -> Result<Paginated<Repository>> {
+        let mut params = Vec::new();
+
+        if let Some(role) = role {
+            params.push(("role", role.to_string()));
+        }
+        if let Some(q) = query {
+            params.push(("q", q.to_string()));
+        }
+        if let Some(sort) = sort {
+            params.push(("sort", sort.to_string()));
+        }
         if let Some(p) = page {
-            query.push(("page", p.to_string()));
+            params.push(("page", p.to_string()));
         }
         if let Some(len) = pagelen {
-            query.push(("pagelen", len.to_string()));
+            params.push(("pagelen", len.to_string()));
         }
 
-        let query_refs: Vec<(&str, &str)> = query.iter().map(|(k, v)| (*k, v.as_str())).collect();
+        let query_refs: Vec<(&str, &str)> = params.iter().map(|(k, v)| (*k, v.as_str())).collect();
 
         let path = format!("/repositories/{}", workspace);
         self.get_with_query(&path, &query_refs).await
@@ -92,23 +120,39 @@ impl BitbucketClient {
         self.post(&path, &request).await
     }
 
-    /// List repository branches
-    pub async fn list_branches(
+    /// List users watching a repository
+    pub async fn list_watchers(
         &self,
         workspace: &str,
         repo_slug: &str,
-    ) -> Result<Paginated<crate::models::Branch>> {
-        let path = format!("/repositories/{}/{}/refs/branches", workspace, repo_slug);
-        self.get(&path).await
+        pagelen: Option<u32>,
+    ) -> Result<Paginated<crate::models::User>> {
+        let path = format!("/repositories/{}/{}/watchers", workspace, repo_slug);
+        match pagelen {
+            Some(len) => {
+                let len = len.to_string();
+                self.get_with_query(&path, &[("pagelen", len.as_str())])
+                    .await
+            }
+            None => self.get(&path).await,
+        }
     }
 
-    /// Get the main branch
-    pub async fn get_main_branch(
+    /// List forks of a repository
+    pub async fn list_forks(
         &self,
         workspace: &str,
         repo_slug: &str,
-    ) -> Result<crate::models::Branch> {
-        let path = format!("/repositories/{}/{}/main-branch", workspace, repo_slug);
-        self.get(&path).await
+        pagelen: Option<u32>,
+    ) -> Result<Paginated<Repository>> {
+        let path = format!("/repositories/{}/{}/forks", workspace, repo_slug);
+        match pagelen {
+            Some(len) => {
+                let len = len.to_string();
+                self.get_with_query(&path, &[("pagelen", len.as_str())])
+                    .await
+            }
+            None => self.get(&path).await,
+        }
     }
 }

@@ -85,6 +85,7 @@ pub struct ProjectLinks {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct CreateRepositoryRequest {
     pub scm: String,
     pub name: Option<String>,
@@ -95,6 +96,10 @@ pub struct CreateRepositoryRequest {
     pub language: Option<String>,
     pub has_issues: Option<bool>,
     pub has_wiki: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub website: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mainbranch: Option<Branch>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -105,6 +110,7 @@ pub struct ProjectKey {
 /// Partial update for an existing repository. Unset fields are omitted from
 /// the request body so the corresponding settings are left untouched.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct UpdateRepositoryRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
@@ -121,6 +127,8 @@ pub struct UpdateRepositoryRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub has_wiki: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub website: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub project: Option<ProjectKey>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mainbranch: Option<Branch>,
@@ -135,6 +143,7 @@ impl UpdateRepositoryRequest {
             && self.fork_policy.is_none()
             && self.has_issues.is_none()
             && self.has_wiki.is_none()
+            && self.website.is_none()
             && self.project.is_none()
             && self.mainbranch.is_none()
     }
@@ -152,6 +161,8 @@ impl Default for CreateRepositoryRequest {
             language: None,
             has_issues: Some(true),
             has_wiki: Some(false),
+            website: None,
+            mainbranch: None,
         }
     }
 }
@@ -202,5 +213,21 @@ mod tests {
             ..Default::default()
         };
         assert!(!with_project.is_empty());
+    }
+
+    #[test]
+    fn update_request_website_counts_as_non_empty_and_serializes() {
+        let request = UpdateRepositoryRequest {
+            website: Some("https://example.com".to_string()),
+            ..Default::default()
+        };
+
+        assert!(!request.is_empty());
+
+        let json = serde_json::to_value(&request).unwrap();
+        assert_eq!(
+            json,
+            serde_json::json!({ "website": "https://example.com" })
+        );
     }
 }

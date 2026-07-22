@@ -4,6 +4,7 @@ use anyhow::{Context, Result};
 use reqwest::multipart::{Form, Part};
 
 use super::BitbucketClient;
+use crate::api::util::urlencode_segment;
 use crate::models::Download;
 
 impl BitbucketClient {
@@ -40,6 +41,22 @@ impl BitbucketClient {
         self.get_all_pages::<Download>(&path).await
     }
 
+    /// Fetch a single artifact's raw bytes from a repository's downloads area.
+    pub async fn get_download(
+        &self,
+        workspace: &str,
+        repo_slug: &str,
+        name: &str,
+    ) -> Result<bytes::Bytes> {
+        let path = format!(
+            "/repositories/{}/{}/downloads/{}",
+            workspace,
+            repo_slug,
+            urlencode_segment(name)
+        );
+        self.get_bytes(&path).await
+    }
+
     /// Delete a single artifact from a repository's downloads area.
     pub async fn delete_download(
         &self,
@@ -68,21 +85,6 @@ pub fn download_url(workspace: &str, repo_slug: &str, name: &str) -> String {
         repo_slug,
         urlencode_segment(name)
     )
-}
-
-/// Percent-encode the characters that are unsafe in a single URL path segment.
-/// Intentionally minimal — file names are mostly `[A-Za-z0-9._-]` plus spaces.
-fn urlencode_segment(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    for b in s.bytes() {
-        match b {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
-                out.push(b as char)
-            }
-            _ => out.push_str(&format!("%{:02X}", b)),
-        }
-    }
-    out
 }
 
 #[cfg(test)]

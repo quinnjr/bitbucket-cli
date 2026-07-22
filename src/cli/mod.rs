@@ -1,8 +1,20 @@
 pub mod auth;
+pub mod branch;
+pub mod branch_restriction;
+pub mod branching_model;
+pub mod commit;
+pub mod deploy;
+pub mod file;
 pub mod issue;
+pub mod pagination;
+pub mod permission;
 pub mod pipeline;
 pub mod pr;
 pub mod repo;
+pub mod reviewer;
+pub mod tag;
+pub mod user;
+pub mod webhook;
 pub mod workspace;
 
 use std::sync::OnceLock;
@@ -22,6 +34,19 @@ pub struct Cli {
     /// Workspace to use when omitted from arguments (overrides config default)
     #[arg(long, global = true)]
     pub workspace: Option<String>,
+
+    /// Output format for command results
+    #[arg(long, global = true, value_enum, default_value_t = OutputFormat::Table)]
+    pub output: OutputFormat,
+}
+
+/// How command results are rendered.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, clap::ValueEnum)]
+pub enum OutputFormat {
+    /// Human-readable tables and text
+    Table,
+    /// Raw JSON for scripting
+    Json,
 }
 
 #[derive(Subcommand)]
@@ -62,8 +87,35 @@ pub enum Commands {
         command: workspace::WorkspaceCommands,
     },
 
+    /// Inspect Bitbucket user accounts
+    User {
+        #[command(subcommand)]
+        command: user::UserCommands,
+    },
+
     /// Launch interactive TUI
     Tui,
+}
+
+static OUTPUT_FORMAT: OnceLock<OutputFormat> = OnceLock::new();
+
+/// Record the global `--output` choice for this process.
+///
+/// `main` must call this once before dispatching a command; later calls are
+/// no-ops (set-once cell).
+pub fn set_output_format(format: OutputFormat) {
+    let _ = OUTPUT_FORMAT.set(format);
+}
+
+/// True when `--output json` was passed; handlers should emit raw JSON.
+pub fn output_json() -> bool {
+    OUTPUT_FORMAT.get().copied() == Some(OutputFormat::Json)
+}
+
+/// Serialize a value as pretty JSON to stdout.
+pub(crate) fn print_json<T: serde::Serialize>(value: &T) -> anyhow::Result<()> {
+    println!("{}", serde_json::to_string_pretty(value)?);
+    Ok(())
 }
 
 static WORKSPACE_OVERRIDE: OnceLock<Option<String>> = OnceLock::new();
@@ -108,6 +160,23 @@ fn resolve_workspace_with(
                 "No workspace specified. Pass a workspace argument, use --workspace, or set a default workspace in the config."
             )
         })
+}
+
+/// Ask the user to confirm a destructive action; on decline, print "Aborted"
+/// and return Ok(false).
+pub(crate) fn confirm_or_abort(prompt: String) -> anyhow::Result<bool> {
+    use dialoguer::Confirm;
+    let confirmed = Confirm::new()
+        .with_prompt(prompt)
+        .default(false)
+        .interact()?;
+
+    if !confirmed {
+        // stderr so an aborted run never corrupts `--output json` on stdout
+        eprintln!("Aborted");
+    }
+
+    Ok(confirmed)
 }
 
 /// Parse `workspace/repo-slug`, or a bare `repo-slug` resolved against

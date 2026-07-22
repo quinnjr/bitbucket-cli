@@ -2,7 +2,7 @@
 
 > A powerful command-line interface for Bitbucket Cloud written in Rust
 
-A feature-rich CLI tool for managing Bitbucket Cloud resources directly from your terminal. It supports repository management, pull requests, issue tracking, CI/CD pipelines, and includes an interactive terminal UI (TUI) for visual browsing. Authentication supports OAuth 2.0 with secure keyring storage and API key fallback for CI/automation scenarios.
+A feature-rich CLI tool for managing Bitbucket Cloud resources directly from your terminal. It supports repository management, pull requests, issue tracking, CI/CD pipelines, workspaces, and user accounts, and includes an interactive terminal UI (TUI) for visual browsing. Authentication supports OAuth 2.0 with secure keyring storage and API key fallback for CI/automation scenarios. Every command accepts a global `--output <table|json>` flag: the default `table` prints human-readable tables, while `--output json` emits raw pretty-printed JSON for scripting and piping into tools like jq.
 
 ## Links
 
@@ -10,13 +10,38 @@ A feature-rich CLI tool for managing Bitbucket Cloud resources directly from you
 - [GitHub Repository](https://github.com/pegasusheavy/bitbucket-cli)
 - [Crates.io Package](https://crates.io/crates/bitbucket-cli)
 
+## Commands
+
+- `bitbucket auth`: login (OAuth 2.0 or API key, with --email/--token for non-interactive use), logout, status
+- `bitbucket repo`: list (--role, -q/--query, --sort, --page), view, clone, create (--description, --public, --project, --fork-policy, --language, --issues, --wiki, --website, --main-branch), update (same flags plus --name, --private), move, fork, delete, watchers, forks, download (upload, list, get, delete)
+- `bitbucket repo branch`: list, create, view, delete
+- `bitbucket repo tag`: list, create, view, delete
+- `bitbucket repo commit`: list, view, diff
+- `bitbucket repo file`: ls, cat, history (all accept --ref)
+- `bitbucket repo webhook`: list, create, view, update, delete
+- `bitbucket repo branch-restriction`: list, create, delete
+- `bitbucket repo reviewer`: list, add, remove (default reviewers)
+- `bitbucket repo permission`: list-users, list-groups, grant-user, revoke-user, grant-group, revoke-group
+- `bitbucket repo deploy-key`: list, add, delete
+- `bitbucket repo environment`: list, create, delete
+- `bitbucket repo deployment`: list, view
+- `bitbucket repo branching-model`: view, set (--development, --production)
+- `bitbucket pr`: list (repeatable --state, -q/--query, --sort, --page), view, create (--reviewers), edit, merge, approve, unapprove, request-changes, unrequest-changes, decline, checkout, diff, diffstat, patch, commits, statuses, activity, comment (--path/--line for inline, --parent for replies), edit-comment, delete-comment, resolve-comment, unresolve-comment, list-comments, view-comment, task (list, add, resolve, reopen, delete), pipelines
+- `bitbucket issue`: list (--state, --kind, --priority, --assignee, --reporter, -q/--query, --sort, --page), view (--comments), create (--assignee, --component, --milestone, --version), edit, delete, close, reopen, comment, comments, edit-comment, delete-comment, changes, vote, unvote, watch, unwatch, components, milestones, versions, attachment (list, add, delete)
+- `bitbucket pipeline`: list (--status, --target-branch, --sort, --page), view (--logs, --step, --full-logs), trigger (--branch, --commit, --pipeline, --var, --secured-var, --wait), stop (--build or --uuid), rerun, config, variable (list, set, delete), workspace-variable (list, set, delete), schedule (list, create, delete), cache (list, delete)
+- `bitbucket workspace`: list (--role, -q/--query, --sort, --limit, --all), view, members, permissions (--repo), project (list, view, create, edit, delete)
+- `bitbucket user`: whoami, view, emails
+- `bitbucket tui`: interactive terminal UI
+
 ## Key Features
 
-- Repository management: list, view, clone, create, update, move, fork, and delete repositories, plus download artifact management (upload, list, delete)
-- Pull request workflows: list, view, create, merge, approve, decline, checkout, diff, comment, list-comments, view-comment, and pipelines
-- Issue tracking: list, view, create, comment on, close, and reopen issues
-- Pipeline management: list, view, trigger, and stop CI/CD pipelines
-- Workspace management: list workspaces
+- Repository management: list, view, clone, create, update, move, fork, and delete repositories; watchers and forks listings; downloads area management; branch, tag, commit, and file browsing; webhooks; branch restrictions; default reviewers; user/group permissions; deploy keys; deployment environments and deployments; branching model
+- Pull request workflows: create, edit, review (approve/unapprove, request-changes), merge, decline, checkout, diff/diffstat/patch, commits, build statuses, activity feed, inline and threaded comments with resolve/unresolve, and PR tasks
+- Issue tracking: full lifecycle (create, edit, close, reopen, delete), filtered listings, comments, attachments, votes, watching, change log, and tracker components/milestones/versions
+- Pipeline management: trigger with variables (including secured) on a branch or commit, wait for completion, view step logs, stop, rerun, pipelines configuration, repository and workspace variables, schedules, and caches
+- Workspace management: list/view workspaces, members, permissions, and projects
+- User accounts: whoami, public profiles, and account emails
+- Scripting: global `--output json` flag on every command for raw JSON output
 - Interactive TUI mode with keyboard-driven navigation
 - Secure authentication via OAuth 2.0 (preferred) or API key fallback
 - Cross-platform: Linux (deb, rpm, Arch, Alpine), Windows (MSI), and from source
@@ -45,8 +70,14 @@ bitbucket repo list myworkspace
 # List pull requests
 bitbucket pr list myworkspace/myrepo
 
-# Create a pull request
-bitbucket pr create myworkspace/myrepo --title "My PR" --source feature-branch
+# Create a pull request with reviewers
+bitbucket pr create myworkspace/myrepo --title "My PR" --source feature-branch --reviewers alice,bob
+
+# Trigger a pipeline with variables and wait for it
+bitbucket pipeline trigger myworkspace/myrepo --branch main --var ENV=staging --wait
+
+# Raw JSON output for scripting
+bitbucket pr list myworkspace/myrepo --output json | jq -r '.[] | "\(.id)\t\(.title)"'
 
 # Launch interactive TUI
 bitbucket tui --workspace myworkspace

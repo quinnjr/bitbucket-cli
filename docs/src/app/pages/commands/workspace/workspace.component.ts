@@ -63,10 +63,20 @@ import { CommonModule } from '@angular/common';
 })
 export class WorkspaceCommandComponent {
   subcommands = [
-    { name: 'list', description: 'List all workspaces you have access to' },
+    { name: 'list', description: 'List workspaces you have access to (--role, -q/--query, --sort, --limit; --all fetches every page)' },
+    { name: 'view', description: 'View workspace details' },
+    { name: 'members', description: 'List members of a workspace' },
+    { name: 'permissions', description: 'List user permissions on a workspace or one of its repositories (--repo)' },
+    { name: 'project', description: 'Manage projects in a workspace (list, view, create, edit, delete)' },
   ];
 
   examples = [
-    { title: 'List all workspaces', command: 'bitbucket workspace list' },
+    { title: 'List workspaces', command: 'bitbucket workspace list' },
+    { title: 'List every workspace you own', command: 'bitbucket workspace list --role owner' },
+    { title: 'View workspace details', command: 'bitbucket workspace view myworkspace' },
+    { title: 'List workspace members', command: 'bitbucket workspace members myworkspace' },
+    { title: 'List permissions on a repository', command: 'bitbucket workspace permissions myworkspace --repo myrepo' },
+    { title: 'List projects', command: 'bitbucket workspace project list myworkspace' },
+    { title: 'Create a project', command: 'bitbucket workspace project create PROJ "My Project" --workspace myworkspace' },
   ];
 }

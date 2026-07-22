@@ -14,9 +14,18 @@ pub struct User {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserLinks {
+    #[serde(rename = "self")]
     pub self_link: Option<Link>,
     pub html: Option<Link>,
     pub avatar: Option<Link>,
+}
+
+/// An email address associated with the authenticated user.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UserEmail {
+    pub email: Option<String>,
+    pub is_primary: Option<bool>,
+    pub is_confirmed: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
