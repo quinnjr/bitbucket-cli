@@ -7,7 +7,7 @@ import starlightLinksValidator from 'starlight-links-validator';
 // Deployed to GitHub Pages as a project site at
 // https://pegasusheavy.github.io/bitbucket-cli/
 export default defineConfig({
-  site: 'https://pegasusheavy.github.io',
+  site: 'https://quinnjr.github.io',
   base: '/bitbucket-cli',
   integrations: [
     sitemap(),
