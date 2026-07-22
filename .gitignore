@@ -23,7 +23,8 @@ Thumbs.db
 .env.local# Documentation site
 docs/node_modules/
 docs/dist/
-docs/.angular/
+docs/.astro/
+docs/plans/
 
 # Test artifacts
 *.log
