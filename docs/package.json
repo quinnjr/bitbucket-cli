@@ -1,48 +1,22 @@
 {
-  "name": "docs",
-  "version": "0.0.0",
-  "scripts": {
-    "ng": "ng",
-    "start": "ng serve",
-    "build": "ng build",
-    "watch": "ng build --watch --configuration development",
-    "test": "ng test"
-  },
-  "prettier": {
-    "printWidth": 100,
-    "singleQuote": true,
-    "overrides": [
-      {
-        "files": "*.html",
-        "options": {
-          "parser": "angular"
-        }
-      }
-    ]
-  },
+  "name": "bitbucket-cli-docs",
+  "type": "module",
+  "version": "1.0.0",
   "private": true,
+  "scripts": {
+    "dev": "astro dev",
+    "start": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro"
+  },
   "dependencies": {
-    "@angular/common": "^21.0.0",
-    "@angular/compiler": "^21.0.0",
-    "@angular/core": "^21.0.0",
-    "@angular/platform-browser": "^21.0.0",
-    "@angular/router": "^21.0.0",
-    "@fortawesome/angular-fontawesome": "^4.0.0",
-    "@fortawesome/fontawesome-svg-core": "^7.2.0",
-    "@fortawesome/free-brands-svg-icons": "^7.2.0",
-    "@fortawesome/free-solid-svg-icons": "^7.1.0",
-    "rxjs": "~7.8.0",
-    "tslib": "^2.3.0"
+    "@astrojs/sitemap": "^3.7.3",
+    "@astrojs/starlight": "^0.41.3",
+    "astro": "^7.0.2",
+    "sharp": "^0.34.5"
   },
   "devDependencies": {
-    "@angular/build": "^21.0.4",
-    "@angular/cli": "^21.0.4",
-    "@angular/compiler-cli": "^21.0.0",
-    "@tailwindcss/postcss": "^4.1.18",
-    "jsdom": "^27.1.0",
-    "postcss": "^8.5.15",
-    "tailwindcss": "^4.1.18",
-    "typescript": "~5.9.2",
-    "vitest": "^4.1.4"
+    "starlight-links-validator": "^0.25.2"
   }
 }

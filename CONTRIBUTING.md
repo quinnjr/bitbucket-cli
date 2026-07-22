@@ -98,6 +98,22 @@ resources. When a resource has more than one verb (list/create/delete), group
 them under a subcommand (`repo download {list,get,delete}`), never as flat
 sibling verbs (`download-list`, `download-get`).
 
+### Keeping the command reference in sync
+
+The command surface is documented in several places that must be updated
+together when you add, rename, or change a flag or subcommand. `--help` (the
+clap definitions in `src/cli/`) is the source of truth; the docs are derived
+from it by hand:
+
+1. The clap definitions in `src/cli/` (source of truth).
+2. The command table in `README.md`.
+3. The relevant page under `docs/src/content/docs/commands/`.
+4. `docs/public/llms.txt`.
+
+The docs command pages are written to mirror the real `--help` output —
+regenerate a page's tables/examples from `bitbucket <group> --help` rather
+than editing prose that can drift.
+
 ### Pagination and limits
 
 All paginated list commands share one policy via `cli::pagination`: a

@@ -1,0 +1,63 @@
+---
+title: Bitbucket CLI
+description: A command-line interface for Bitbucket Cloud — manage repositories, pull requests, issues, and pipelines from your terminal.
+template: splash
+hero:
+  tagline: Manage repositories, pull requests, issues, and pipelines on Bitbucket Cloud — without leaving your terminal.
+  image:
+    file: ../../assets/logo.svg
+  actions:
+    - text: Get started
+      link: /bitbucket-cli/installation/
+      icon: right-arrow
+      variant: primary
+    - text: View on GitHub
+      link: https://github.com/pegasusheavy/bitbucket-cli
+      icon: external
+      variant: minimal
+---
+
+import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+## Why Bitbucket CLI
+
+<CardGrid>
+	<Card title="Repositories" icon="seti:git">
+		List, view, clone, create, fork, and manage repositories — plus
+		branches, tags, commits, file browsing, webhooks, permissions, deploy
+		keys, and more.
+	</Card>
+	<Card title="Pull requests" icon="seti:pull-request">
+		Create, review, merge, approve, decline, and comment on PRs, including
+		inline and threaded comments, tasks, statuses, and diffs.
+	</Card>
+	<Card title="Issues & pipelines" icon="rocket">
+		Track issues end to end and trigger, monitor, and manage CI/CD
+		pipelines, variables, schedules, and caches.
+	</Card>
+	<Card title="Scriptable" icon="setting">
+		Every command supports `--output json` for clean, machine-readable
+		output you can pipe into `jq` and automation.
+	</Card>
+</CardGrid>
+
+## Quick start
+
+```bash
+# Install (Rust toolchain)
+cargo install bitbucket-cli
+
+# Authenticate with OAuth 2.0
+bitbucket auth login --oauth
+
+# Start working
+bitbucket repo list myworkspace
+bitbucket pr create myworkspace/myrepo --title "My PR" --source feature-branch
+```
+
+<CardGrid>
+	<LinkCard title="Installation" href="/bitbucket-cli/installation/" description="Cargo, prebuilt binaries, and platform packages." />
+	<LinkCard title="Authentication" href="/bitbucket-cli/authentication/" description="OAuth 2.0 and API-token login." />
+	<LinkCard title="Commands" href="/bitbucket-cli/commands/repo/" description="Full command reference." />
+	<LinkCard title="Scripting with JSON" href="/bitbucket-cli/scripting/" description="Machine-readable output for automation." />
+</CardGrid>

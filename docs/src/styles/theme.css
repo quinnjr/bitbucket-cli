@@ -1,0 +1,44 @@
+/* Bitbucket-blue accent for Starlight, tuned for light and dark themes. */
+:root {
+  --sl-color-accent-low: #0a2a5e;
+  --sl-color-accent: #0052cc;
+  --sl-color-accent-high: #b3ccf5;
+
+  --sl-color-text-accent: #0052cc;
+
+  --bb-blue: #0052cc;
+  --bb-blue-light: #2684ff;
+}
+
+/* Dark theme (Starlight default). */
+:root[data-theme='dark'] {
+  --sl-color-accent-low: #0a2a5e;
+  --sl-color-accent: #2684ff;
+  --sl-color-accent-high: #cfe0fb;
+  --sl-color-text-accent: #79b8ff;
+}
+
+/* Light theme. */
+:root[data-theme='light'] {
+  --sl-color-accent-low: #cfe0fb;
+  --sl-color-accent: #0052cc;
+  --sl-color-accent-high: #003280;
+  --sl-color-text-accent: #0747a6;
+}
+
+/* Brand the site title next to the logo. */
+.site-title {
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+/* Make hero call-to-action buttons feel on-brand. */
+.hero .actions a[data-variant='primary'] {
+  background: var(--bb-blue);
+  border-color: var(--bb-blue);
+}
+
+/* Slightly tighter, monospace-friendly inline code. */
+code {
+  font-size: 0.9em;
+}
