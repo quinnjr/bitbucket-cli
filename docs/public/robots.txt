@@ -28,4 +28,4 @@ Allow: /
 User-agent: PerplexityBot
 Allow: /
 
-Sitemap: https://pegasusheavy.github.io/bitbucket-cli/sitemap.xml
+Sitemap: https://pegasusheavy.github.io/bitbucket-cli/sitemap-index.xml
