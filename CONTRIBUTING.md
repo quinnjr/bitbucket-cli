@@ -27,15 +27,34 @@ Enhancement suggestions are tracked as GitHub issues. When creating an enhanceme
 - **Explain why this enhancement would be useful**
 - **List any alternatives you've considered**
 
+### Branching Model (Git Flow)
+
+This project follows [Git Flow](https://nvie.com/posts/a-successful-git-branching-model/):
+
+- **`main`** holds released, production-ready code. It only advances when a
+  release or hotfix is merged, and every commit on it is tagged (`vX.Y.Z`).
+- **`develop`** is the default branch and the integration target for all
+  day-to-day work. Open your pull requests against `develop`.
+- **`feature/*`** branches off `develop` and merges back into `develop`.
+- **`release/*`** branches off `develop` for release stabilization, then
+  merges into both `main` (tagged) and `develop`.
+- **`hotfix/*`** branches off `main` for urgent production fixes, then merges
+  into both `main` (tagged) and `develop`.
+
+The [`git-flow`](https://github.com/petprojects/gitflow) CLI is configured for
+this repo (`main` as the production branch); `git flow feature start <name>`,
+`git flow release start <version>`, etc. use these conventions. Plain git works
+too — just branch from and target `develop`.
+
 ### Pull Requests
 
-1. **Fork the repository** and create your branch from `main`
+1. **Fork the repository** and create your branch from `develop`
 2. **Install dependencies**: Make sure you have Rust installed via [rustup](https://rustup.rs/)
 3. **Make your changes**: Follow the coding standards below
 4. **Test your changes**: Run `cargo test` and `cargo clippy`
 5. **Format your code**: Run `cargo fmt`
 6. **Commit your changes**: Use clear, descriptive commit messages
-7. **Push and create a PR**: Fill out the PR template completely
+7. **Push and open a PR against `develop`**: Fill out the PR template completely
 
 ## Development Setup
 
