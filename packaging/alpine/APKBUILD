@@ -4,12 +4,12 @@ pkgname=bitbucket-cli
 pkgver=1.0.0
 pkgrel=0
 pkgdesc="A powerful command-line interface for Bitbucket Cloud"
-url="https://github.com/pegasusheavy/bitbucket-cli"
+url="https://github.com/quinnjr/bitbucket-cli"
 arch="all"
 license="MIT"
 depends="dbus-libs"
 makedepends="cargo rust dbus-dev cargo-auditable"
-source="$pkgname-$pkgver.tar.gz::https://github.com/pegasusheavy/bitbucket-cli/archive/v$pkgver.tar.gz"
+source="$pkgname-$pkgver.tar.gz::https://github.com/quinnjr/bitbucket-cli/archive/v$pkgver.tar.gz"
 options="net" # cargo fetch
 
 prepare() {

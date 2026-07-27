@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: Documentation
-    url: https://pegasusheavy.github.io/bitbucket-cli/
+    url: https://quinnjr.github.io/bitbucket-cli/
     about: Check out our documentation for help and guides
   - name: Discussions
-    url: https://github.com/pegasusheavy/bitbucket-cli/discussions
+    url: https://github.com/quinnjr/bitbucket-cli/discussions
     about: Ask questions and discuss with the community

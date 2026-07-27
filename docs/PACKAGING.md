@@ -211,12 +211,12 @@ Dependencies:
 Install with:
 ```bash
 # Recommended: download the PKGBUILD from releases and build the package
-wget https://github.com/pegasusheavy/bitbucket-cli/releases/latest/download/PKGBUILD
+wget https://github.com/quinnjr/bitbucket-cli/releases/latest/download/PKGBUILD
 makepkg -si
 
 # Or download the binary tarball and extract it manually
 # (it is a plain zstd tarball, not a pacman package — pacman -U does not work on it)
-wget https://github.com/pegasusheavy/bitbucket-cli/releases/latest/download/bitbucket-cli-vX.X.X-x86_64-linux.tar.zst
+wget https://github.com/quinnjr/bitbucket-cli/releases/latest/download/bitbucket-cli-vX.X.X-x86_64-linux.tar.zst
 tar --zstd -xf bitbucket-cli-vX.X.X-x86_64-linux.tar.zst
 sudo mv bitbucket /usr/local/bin/
 ```
