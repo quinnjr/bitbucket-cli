@@ -226,8 +226,8 @@ If you find this project useful, please consider:
 - ⭐ Starring the repository
 - 🐛 Reporting bugs
 - 💡 Suggesting features
-- 💰 [Supporting on Patreon](https://www.patreon.com/c/PegasusHeavyIndustries)
+- 💰 [Supporting the project](https://quinnjr.dev)
 
 ---
 
-Made with ❤️ by [Pegasus Heavy Industries](https://github.com/pegasusheavy)
+Made with ❤️ by [quinnjr](https://quinnjr.dev)

@@ -23,7 +23,7 @@ use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
 #[command(name = "bitbucket")]
-#[command(author = "Pegasus Heavy Industries")]
+#[command(author = "quinnjr")]
 #[command(version)]
 #[command(about = "A command-line interface for Bitbucket Cloud", long_about = None)]
 #[command(propagate_version = true)]
