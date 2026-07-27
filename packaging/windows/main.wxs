@@ -5,7 +5,7 @@
     <Package
         Name="Bitbucket CLI"
         Manufacturer="quinnjr"
-        Version="1.0.0"
+        Version="1.0.1"
         UpgradeCode="12345678-1234-1234-1234-123456789012"
         Scope="perMachine"
         InstallerVersion="450"
