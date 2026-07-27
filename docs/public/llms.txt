@@ -6,8 +6,8 @@ A feature-rich CLI tool for managing Bitbucket Cloud resources directly from you
 
 ## Links
 
-- [Documentation](https://pegasusheavy.github.io/bitbucket-cli/)
-- [GitHub Repository](https://github.com/pegasusheavy/bitbucket-cli)
+- [Documentation](https://quinnjr.github.io/bitbucket-cli/)
+- [GitHub Repository](https://github.com/quinnjr/bitbucket-cli)
 - [Crates.io Package](https://crates.io/crates/bitbucket-cli)
 
 ## Commands
@@ -53,7 +53,7 @@ A feature-rich CLI tool for managing Bitbucket Cloud resources directly from you
 cargo install bitbucket-cli
 
 # From source
-git clone https://github.com/pegasusheavy/bitbucket-cli.git
+git clone https://github.com/quinnjr/bitbucket-cli.git
 cd bitbucket-cli
 cargo install --path .
 ```

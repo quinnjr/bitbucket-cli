@@ -199,8 +199,8 @@ A: Only one credential is stored at a time. You can switch between them using `b
 ### Support
 
 For issues or questions:
-- GitHub Issues: https://github.com/pegasusheavy/bitbucket-cli/issues
-- Documentation: https://pegasusheavy.github.io/bitbucket-cli/
+- GitHub Issues: https://github.com/quinnjr/bitbucket-cli/issues
+- Documentation: https://quinnjr.github.io/bitbucket-cli/
 
 ### Timeline
 

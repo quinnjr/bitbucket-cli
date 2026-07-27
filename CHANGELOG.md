@@ -5,6 +5,19 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.1] - 2026-07-27
+
+### Changed
+
+- Repository transferred to `github.com/quinnjr/bitbucket-cli`. The crate's
+  `repository`, `homepage`, and `documentation` metadata, along with all badges,
+  install commands, and packaging sources, now point at the new location; the
+  documentation site moved to <https://quinnjr.github.io/bitbucket-cli/>.
+- Rebranded from Pegasus Heavy Industries to `quinnjr`; copyright is now held by
+  Joseph Quinn, and support/funding links point to <https://quinnjr.dev>.
+- Rebuilt the documentation site with Astro + Starlight and adopted the Git Flow
+  branching model.
+
 ## [1.0.0] - 2026-07-21
 
 ### Added

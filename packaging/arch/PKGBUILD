@@ -1,14 +1,14 @@
-# Maintainer: Pegasus Heavy Industries
+# Maintainer: quinnjr
 pkgname=bitbucket-cli
-pkgver=1.0.0
+pkgver=1.0.1
 pkgrel=1
 pkgdesc="A powerful command-line interface for Bitbucket Cloud"
 arch=('x86_64' 'aarch64')
-url="https://github.com/pegasusheavy/bitbucket-cli"
+url="https://github.com/quinnjr/bitbucket-cli"
 license=('MIT')
 depends=('dbus' 'gcc-libs')
 makedepends=('cargo' 'rust')
-source=("$pkgname-$pkgver.tar.gz::https://github.com/pegasusheavy/bitbucket-cli/archive/v$pkgver.tar.gz")
+source=("$pkgname-$pkgver.tar.gz::https://github.com/quinnjr/bitbucket-cli/archive/v$pkgver.tar.gz")
 sha256sums=('SKIP')
 
 prepare() {

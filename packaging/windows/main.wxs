@@ -4,8 +4,8 @@
 
     <Package
         Name="Bitbucket CLI"
-        Manufacturer="Pegasus Heavy Industries"
-        Version="1.0.0"
+        Manufacturer="quinnjr"
+        Version="1.0.1"
         UpgradeCode="12345678-1234-1234-1234-123456789012"
         Scope="perMachine"
         InstallerVersion="450"
@@ -66,7 +66,7 @@
 
         <Icon Id="ProductICO" SourceFile="packaging\windows\icon.ico" />
         <Property Id="ARPPRODUCTICON" Value="ProductICO" />
-        <Property Id="ARPHELPLINK" Value="https://github.com/pegasusheavy/bitbucket-cli" />
+        <Property Id="ARPHELPLINK" Value="https://github.com/quinnjr/bitbucket-cli" />
 
         <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="APPLICATIONFOLDER" />
 

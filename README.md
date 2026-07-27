@@ -1,7 +1,7 @@
 # Bitbucket CLI
 
-[![CI](https://github.com/pegasusheavy/bitbucket-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/pegasusheavy/bitbucket-cli/actions/workflows/ci.yml)
-[![Release](https://github.com/pegasusheavy/bitbucket-cli/actions/workflows/release.yml/badge.svg)](https://github.com/pegasusheavy/bitbucket-cli/releases)
+[![CI](https://github.com/quinnjr/bitbucket-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/quinnjr/bitbucket-cli/actions/workflows/ci.yml)
+[![Release](https://github.com/quinnjr/bitbucket-cli/actions/workflows/release.yml/badge.svg)](https://github.com/quinnjr/bitbucket-cli/releases)
 [![Crates.io](https://img.shields.io/crates/v/bitbucket-cli.svg)](https://crates.io/crates/bitbucket-cli)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
@@ -28,7 +28,7 @@ cargo install bitbucket-cli
 
 ```bash
 # Download the .deb package from releases
-wget https://github.com/pegasusheavy/bitbucket-cli/releases/latest/download/bitbucket-cli_amd64.deb
+wget https://github.com/quinnjr/bitbucket-cli/releases/latest/download/bitbucket-cli_amd64.deb
 sudo dpkg -i bitbucket-cli_amd64.deb
 ```
 
@@ -36,7 +36,7 @@ sudo dpkg -i bitbucket-cli_amd64.deb
 
 ```bash
 # Download the .rpm package from releases
-wget https://github.com/pegasusheavy/bitbucket-cli/releases/latest/download/bitbucket-cli.x86_64.rpm
+wget https://github.com/quinnjr/bitbucket-cli/releases/latest/download/bitbucket-cli.x86_64.rpm
 sudo rpm -i bitbucket-cli.x86_64.rpm
 # or with dnf
 sudo dnf install bitbucket-cli.x86_64.rpm
@@ -46,11 +46,11 @@ sudo dnf install bitbucket-cli.x86_64.rpm
 
 ```bash
 # Recommended: download the PKGBUILD from releases and build the package
-wget https://github.com/pegasusheavy/bitbucket-cli/releases/latest/download/PKGBUILD
+wget https://github.com/quinnjr/bitbucket-cli/releases/latest/download/PKGBUILD
 makepkg -si
 
 # Or download the binary tarball and extract it manually
-wget https://github.com/pegasusheavy/bitbucket-cli/releases/latest/download/bitbucket-cli-vX.X.X-x86_64-linux.tar.zst
+wget https://github.com/quinnjr/bitbucket-cli/releases/latest/download/bitbucket-cli-vX.X.X-x86_64-linux.tar.zst
 tar --zstd -xf bitbucket-cli-vX.X.X-x86_64-linux.tar.zst
 sudo mv bitbucket /usr/local/bin/
 ```
@@ -59,26 +59,26 @@ sudo mv bitbucket /usr/local/bin/
 
 ```bash
 # Download the tarball from releases
-wget https://github.com/pegasusheavy/bitbucket-cli/releases/latest/download/bitbucket-cli-vX.X.X-alpine-x86_64.tar.gz
+wget https://github.com/quinnjr/bitbucket-cli/releases/latest/download/bitbucket-cli-vX.X.X-alpine-x86_64.tar.gz
 tar -xzf bitbucket-cli-vX.X.X-alpine-x86_64.tar.gz
 sudo mv bitbucket /usr/local/bin/
 ```
 
 ### Windows
 
-Download the MSI installer from the [Releases](https://github.com/pegasusheavy/bitbucket-cli/releases) page and run it.
+Download the MSI installer from the [Releases](https://github.com/quinnjr/bitbucket-cli/releases) page and run it.
 
 ### From Source
 
 ```bash
-git clone https://github.com/pegasusheavy/bitbucket-cli.git
+git clone https://github.com/quinnjr/bitbucket-cli.git
 cd bitbucket-cli
 cargo install --path .
 ```
 
 ### Pre-built Binaries
 
-Download pre-built binaries for your platform from the [Releases](https://github.com/pegasusheavy/bitbucket-cli/releases) page.
+Download pre-built binaries for your platform from the [Releases](https://github.com/quinnjr/bitbucket-cli/releases) page.
 
 ## 🚀 Quick Start
 
@@ -203,7 +203,7 @@ pager = true
 
 ## 📚 Documentation
 
-Full documentation is available at [pegasusheavy.github.io/bitbucket-cli](https://pegasusheavy.github.io/bitbucket-cli/)
+Full documentation is available at [quinnjr.github.io/bitbucket-cli](https://quinnjr.github.io/bitbucket-cli/)
 
 ## 🤝 Contributing
 
@@ -226,8 +226,8 @@ If you find this project useful, please consider:
 - ⭐ Starring the repository
 - 🐛 Reporting bugs
 - 💡 Suggesting features
-- 💰 [Supporting on Patreon](https://www.patreon.com/c/PegasusHeavyIndustries)
+- 💰 [Supporting the project](https://quinnjr.dev)
 
 ---
 
-Made with ❤️ by [Pegasus Heavy Industries](https://github.com/pegasusheavy)
+Made with ❤️ by [quinnjr](https://quinnjr.dev)
