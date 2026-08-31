@@ -1,11 +1,13 @@
-use anyhow::Result;
+use std::io::{IsTerminal, Read};
+
+use anyhow::{Context, Result};
 use clap::Subcommand;
 use colored::Colorize;
 use tabled::{Table, Tabled};
 
 use super::{confirm_or_abort, output_json, parse_repo, print_json};
 use crate::api::BitbucketClient;
-use crate::models::{CreateWebhookRequest, Webhook};
+use crate::models::{CreateWebhookRequest, SecretUpdate, Webhook};
 
 #[derive(Subcommand)]
 pub enum WebhookCommands {
@@ -35,6 +37,13 @@ pub enum WebhookCommands {
         /// Description of the webhook
         #[arg(short, long)]
         description: Option<String>,
+
+        /// Signing secret for the X-Hub-Signature HMAC. Pass `-` to read the
+        /// secret from stdin (recommended: a literal value is visible in the
+        /// process list and shell history). Omit to leave the hook unsigned;
+        /// no equivalent of `update --clear-secret` is needed at creation.
+        #[arg(long, value_name = "SECRET")]
+        secret: Option<String>,
 
         /// Create the webhook in a disabled state
         #[arg(long)]
@@ -70,6 +79,16 @@ pub enum WebhookCommands {
         #[arg(short, long)]
         description: Option<String>,
 
+        /// Set/replace the signing secret for the X-Hub-Signature HMAC. Pass
+        /// `-` to read the secret from stdin (recommended: a literal value is
+        /// visible in the process list and shell history).
+        #[arg(long, value_name = "SECRET", conflicts_with = "clear_secret")]
+        secret: Option<String>,
+
+        /// Remove the configured signing secret from the webhook
+        #[arg(long)]
+        clear_secret: bool,
+
         /// Enable or disable the webhook
         #[arg(long, value_name = "true|false")]
         active: Option<bool>,
@@ -97,6 +116,8 @@ struct WebhookRow {
     url: String,
     #[tabled(rename = "ACTIVE")]
     active: String,
+    #[tabled(rename = "SECRET")]
+    secret: String,
     #[tabled(rename = "EVENTS")]
     events: String,
 }
@@ -132,6 +153,12 @@ impl WebhookCommands {
                             "No"
                         }
                         .to_string(),
+                        secret: if h.secret_set.unwrap_or(false) {
+                            "Yes"
+                        } else {
+                            "No"
+                        }
+                        .to_string(),
                         events: h.events.join(", ").chars().take(60).collect(),
                     })
                     .collect();
@@ -153,6 +180,7 @@ impl WebhookCommands {
                 url,
                 events,
                 description,
+                secret,
                 inactive,
             } => {
                 let (workspace, repo_slug) = parse_repo(&repo)?;
@@ -163,6 +191,7 @@ impl WebhookCommands {
                     url,
                     active: !inactive,
                     events,
+                    secret: resolve_secret_update(secret, false)?,
                 };
 
                 let hook = client
@@ -212,6 +241,15 @@ impl WebhookCommands {
                         "No"
                     }
                 );
+                println!(
+                    "{} {}",
+                    "Secret:".dimmed(),
+                    if hook.secret_set.unwrap_or(false) {
+                        "Set"
+                    } else {
+                        "Not set"
+                    }
+                );
 
                 if hook.events.is_empty() {
                     println!("{} (none)", "Events:".dimmed());
@@ -231,11 +269,20 @@ impl WebhookCommands {
                 url,
                 events,
                 description,
+                secret,
+                clear_secret,
                 active,
             } => {
                 let (workspace, repo_slug) = parse_repo(&repo)?;
 
-                if url.is_none() && events.is_empty() && description.is_none() && active.is_none() {
+                let secret_update = resolve_secret_update(secret, clear_secret)?;
+
+                if url.is_none()
+                    && events.is_empty()
+                    && description.is_none()
+                    && active.is_none()
+                    && secret_update == SecretUpdate::Unchanged
+                {
                     anyhow::bail!(
                         "Nothing to update. Pass at least one option, e.g. --url or --active."
                     );
@@ -246,7 +293,8 @@ impl WebhookCommands {
                 // PUT replaces the whole subscription, so merge the requested
                 // changes into the current state before sending.
                 let current = client.get_webhook(&workspace, &repo_slug, &uid).await?;
-                let request = build_webhook_update(current, url, events, description, active);
+                let request =
+                    build_webhook_update(current, url, events, description, active, secret_update);
 
                 let updated = client
                     .update_webhook(&workspace, &repo_slug, &uid, &request)
@@ -289,6 +337,45 @@ impl WebhookCommands {
     }
 }
 
+/// Translate the `--secret` / `--clear-secret` flags into a [`SecretUpdate`].
+///
+/// `--secret <value>` sets the secret; the sentinel `--secret -` reads the
+/// secret from stdin so callers can pipe it in without exposing it in the
+/// process list or shell history. `--clear-secret` removes the secret. Passing
+/// neither leaves the secret untouched. Clap enforces that the two flags are
+/// mutually exclusive, so `secret.is_some()` takes precedence defensively.
+fn resolve_secret_update(secret: Option<String>, clear_secret: bool) -> Result<SecretUpdate> {
+    match (secret, clear_secret) {
+        (Some(value), _) if value == "-" => Ok(SecretUpdate::Set(read_secret_from_stdin()?)),
+        (Some(value), _) => Ok(SecretUpdate::Set(value)),
+        (None, true) => Ok(SecretUpdate::Clear),
+        (None, false) => Ok(SecretUpdate::Unchanged),
+    }
+}
+
+/// Read a signing secret from stdin, trimming a single trailing newline so
+/// `printf %s | ...` and `echo | ...` both work. Rejects an empty secret so a
+/// stray empty pipe can't silently create an unsigned hook the user believed
+/// was signed.
+fn read_secret_from_stdin() -> Result<String> {
+    let mut buf = String::new();
+    if std::io::stdin().is_terminal() {
+        anyhow::bail!(
+            "`--secret -` expects the secret on stdin, but stdin is a terminal. \
+             Pipe the secret in, e.g. `printf %s \"$SECRET\" | bitbucket ... --secret -`."
+        );
+    }
+    std::io::stdin()
+        .read_to_string(&mut buf)
+        .context("Failed to read secret from stdin")?;
+    let secret = buf.strip_suffix('\n').unwrap_or(&buf);
+    let secret = secret.strip_suffix('\r').unwrap_or(secret);
+    if secret.is_empty() {
+        anyhow::bail!("Secret read from stdin was empty");
+    }
+    Ok(secret.to_string())
+}
+
 /// Merge `webhook update` flags into the current subscription to produce the
 /// full replacement body Bitbucket's PUT expects. Unset flags keep the current
 /// values; a webhook with no recorded `active` state defaults to enabled.
@@ -298,6 +385,7 @@ fn build_webhook_update(
     events: Vec<String>,
     description: Option<String>,
     active: Option<bool>,
+    secret: SecretUpdate,
 ) -> CreateWebhookRequest {
     CreateWebhookRequest {
         description: description.or(current.description),
@@ -308,13 +396,14 @@ fn build_webhook_update(
         } else {
             events
         },
+        secret,
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::build_webhook_update;
-    use crate::models::Webhook;
+    use super::{build_webhook_update, resolve_secret_update};
+    use crate::models::{SecretUpdate, Webhook};
 
     fn current() -> Webhook {
         Webhook {
@@ -323,16 +412,25 @@ mod tests {
             description: Some("old description".to_string()),
             active: Some(true),
             events: vec!["repo:push".to_string()],
+            secret_set: Some(true),
         }
     }
 
     #[test]
     fn build_webhook_update_keeps_current_values_when_flags_unset() {
-        let request = build_webhook_update(current(), None, Vec::new(), None, None);
+        let request = build_webhook_update(
+            current(),
+            None,
+            Vec::new(),
+            None,
+            None,
+            SecretUpdate::Unchanged,
+        );
         assert_eq!(request.url, "https://old.example.com/hook");
         assert_eq!(request.description.as_deref(), Some("old description"));
         assert!(request.active);
         assert_eq!(request.events, vec!["repo:push".to_string()]);
+        assert_eq!(request.secret, SecretUpdate::Unchanged);
     }
 
     #[test]
@@ -343,18 +441,69 @@ mod tests {
             vec!["pullrequest:created".to_string()],
             Some("new description".to_string()),
             Some(false),
+            SecretUpdate::Set("topsecret".to_string()),
         );
         assert_eq!(request.url, "https://new.example.com/hook");
         assert_eq!(request.description.as_deref(), Some("new description"));
         assert!(!request.active);
         assert_eq!(request.events, vec!["pullrequest:created".to_string()]);
+        assert_eq!(request.secret, SecretUpdate::Set("topsecret".to_string()));
     }
 
     #[test]
     fn build_webhook_update_defaults_unknown_active_state_to_enabled() {
         let mut hook = current();
         hook.active = None;
-        let request = build_webhook_update(hook, None, Vec::new(), None, None);
+        let request =
+            build_webhook_update(hook, None, Vec::new(), None, None, SecretUpdate::Unchanged);
         assert!(request.active);
+    }
+
+    #[test]
+    fn build_webhook_update_can_clear_secret() {
+        let request =
+            build_webhook_update(current(), None, Vec::new(), None, None, SecretUpdate::Clear);
+        assert_eq!(request.secret, SecretUpdate::Clear);
+    }
+
+    #[test]
+    fn build_webhook_update_leaves_secret_unchanged_by_default() {
+        // Merging must never resurrect a plaintext secret from the read model
+        // (Bitbucket never returns one), so the default is always Unchanged.
+        let request = build_webhook_update(
+            current(),
+            Some("https://new.example.com/hook".to_string()),
+            Vec::new(),
+            None,
+            None,
+            SecretUpdate::Unchanged,
+        );
+        assert_eq!(request.secret, SecretUpdate::Unchanged);
+    }
+
+    #[test]
+    fn resolve_secret_update_sets_literal_value() {
+        let resolved = resolve_secret_update(Some("hunter2".to_string()), false).unwrap();
+        assert_eq!(resolved, SecretUpdate::Set("hunter2".to_string()));
+    }
+
+    #[test]
+    fn resolve_secret_update_clears_when_flag_set() {
+        let resolved = resolve_secret_update(None, true).unwrap();
+        assert_eq!(resolved, SecretUpdate::Clear);
+    }
+
+    #[test]
+    fn resolve_secret_update_unchanged_when_no_flags() {
+        let resolved = resolve_secret_update(None, false).unwrap();
+        assert_eq!(resolved, SecretUpdate::Unchanged);
+    }
+
+    #[test]
+    fn resolve_secret_update_literal_value_wins_over_clear() {
+        // Clap enforces mutual exclusion, but the resolver must still be
+        // deterministic if both ever arrive together: an explicit value wins.
+        let resolved = resolve_secret_update(Some("hunter2".to_string()), true).unwrap();
+        assert_eq!(resolved, SecretUpdate::Set("hunter2".to_string()));
     }
 }
