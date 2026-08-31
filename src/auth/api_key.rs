@@ -79,7 +79,7 @@ impl ApiKeyAuth {
             println!("   This might not be a valid Bitbucket API token.");
             println!(
                 "   Token starts with: {}",
-                &api_key.chars().take(5).collect::<String>()
+                api_key.chars().take(5).collect::<String>()
             );
         }
 
