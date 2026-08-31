@@ -5,6 +5,20 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- repo webhook: `create` and `update` accept `--secret <SECRET>` to configure
+  the signing secret Bitbucket uses to generate the `X-Hub-Signature` HMAC
+  header; `update --clear-secret` removes a configured secret. Pass `--secret -`
+  to read the secret from stdin so it never appears in the process list or
+  shell history. `view` shows whether a secret is set, and `list` gains a
+  `SECRET` column. On `update`, the secret is left untouched unless `--secret`
+  or `--clear-secret` is passed, so the GET-then-PUT merge never clobbers an
+  existing secret; the read model never re-exposes a plaintext secret returned
+  by the API.
+
 ## [1.0.1] - 2026-07-27
 
 ### Changed

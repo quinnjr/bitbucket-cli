@@ -220,6 +220,27 @@ bitbucket repo webhook create myworkspace/myrepo \
   --event pullrequest:created
 ```
 
+Create a webhook with a signing secret (used for the `X-Hub-Signature` HMAC),
+then rotate or remove it later. Pass `--secret -` to read the secret from
+stdin instead of the command line, so it never lands in the process list or
+shell history:
+
+```bash
+bitbucket repo webhook create myworkspace/myrepo \
+  --url https://ci.example.com/hook \
+  --event repo:push \
+  --secret -  <<<"$WEBHOOK_SECRET"
+
+# rotate the secret (leaves all other fields untouched)
+printf %s "$NEW_SECRET" | bitbucket repo webhook update myworkspace/myrepo '{uuid}' --secret -
+
+# remove the secret entirely
+bitbucket repo webhook update myworkspace/myrepo '{uuid}' --clear-secret
+```
+
+Omitting `--secret` on `create` leaves the hook unsigned; there is no
+`--clear-secret` at creation time because there is nothing to clear.
+
 Upload a build artifact to the repository's downloads area:
 
 ```bash
