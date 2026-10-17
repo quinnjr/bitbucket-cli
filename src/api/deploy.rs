@@ -2,7 +2,8 @@ use anyhow::Result;
 
 use super::BitbucketClient;
 use crate::models::{
-    AddDeployKeyRequest, CreateEnvironmentRequest, DeployKey, Deployment, Environment, Paginated,
+    AddDeployKeyRequest, CreateEnvironmentRequest, DeployKey, Deployment, Environment,
+    EnvironmentVariable, EnvironmentVariableInput, Paginated,
 };
 
 impl BitbucketClient {
@@ -80,6 +81,70 @@ impl BitbucketClient {
         let path = format!(
             "/repositories/{}/{}/environments/{}",
             workspace, repo_slug, environment_uuid
+        );
+        self.delete(&path).await
+    }
+
+    // -----------------------------------------------------------------------
+    // Deployment-environment variables
+    // -----------------------------------------------------------------------
+
+    /// List the variables configured on a deployment environment.
+    pub async fn list_environment_variables(
+        &self,
+        workspace: &str,
+        repo_slug: &str,
+        environment_uuid: &str,
+    ) -> Result<Vec<EnvironmentVariable>> {
+        let path = format!(
+            "/repositories/{}/{}/deployments_config/environments/{}/variables/",
+            workspace, repo_slug, environment_uuid
+        );
+        self.get_all_pages(&path).await
+    }
+
+    /// Create a variable on a deployment environment.
+    pub async fn create_environment_variable(
+        &self,
+        workspace: &str,
+        repo_slug: &str,
+        environment_uuid: &str,
+        variable: &EnvironmentVariableInput,
+    ) -> Result<EnvironmentVariable> {
+        let path = format!(
+            "/repositories/{}/{}/deployments_config/environments/{}/variables/",
+            workspace, repo_slug, environment_uuid
+        );
+        self.post(&path, variable).await
+    }
+
+    /// Update an existing variable on a deployment environment.
+    pub async fn update_environment_variable(
+        &self,
+        workspace: &str,
+        repo_slug: &str,
+        environment_uuid: &str,
+        variable_uuid: &str,
+        variable: &EnvironmentVariableInput,
+    ) -> Result<EnvironmentVariable> {
+        let path = format!(
+            "/repositories/{}/{}/deployments_config/environments/{}/variables/{}",
+            workspace, repo_slug, environment_uuid, variable_uuid
+        );
+        self.put(&path, variable).await
+    }
+
+    /// Delete a variable from a deployment environment.
+    pub async fn delete_environment_variable(
+        &self,
+        workspace: &str,
+        repo_slug: &str,
+        environment_uuid: &str,
+        variable_uuid: &str,
+    ) -> Result<()> {
+        let path = format!(
+            "/repositories/{}/{}/deployments_config/environments/{}/variables/{}",
+            workspace, repo_slug, environment_uuid, variable_uuid
         );
         self.delete(&path).await
     }

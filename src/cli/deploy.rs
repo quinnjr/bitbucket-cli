@@ -10,6 +10,7 @@ use crate::api::BitbucketClient;
 use crate::cli::pagination::{MAX_LIMIT, effective_limit as capped_limit};
 use crate::models::{
     AddDeployKeyRequest, CreateEnvironmentRequest, Deployment, Environment, EnvironmentType,
+    EnvironmentVariable, EnvironmentVariableInput,
 };
 
 /// How many characters of SSH key material to show in list tables.
@@ -95,6 +96,66 @@ pub enum EnvironmentCommands {
 
         /// Environment UUID (see `environment list`)
         uuid: String,
+
+        /// Skip confirmation prompt
+        #[arg(short, long)]
+        yes: bool,
+    },
+
+    /// Manage variables scoped to a deployment environment
+    Variable {
+        #[command(subcommand)]
+        command: EnvironmentVariableCommands,
+    },
+}
+
+/// Commands for managing variables on a single deployment environment.
+///
+/// Unlike `pipeline variable` (repository-wide) and `pipeline
+/// workspace-variable` (workspace-wide), these are scoped to one environment,
+/// so the same key can carry a different value per environment — which is how
+/// a `deployment: staging` step and a `deployment: production` step see
+/// different `AWS_ROLE_ARN`, bucket, etc.
+#[derive(Subcommand)]
+pub enum EnvironmentVariableCommands {
+    /// List the variables on a deployment environment
+    List {
+        /// Repository in format workspace/repo-slug
+        repo: String,
+
+        /// Environment UUID (see `environment list`)
+        environment: String,
+    },
+
+    /// Create or update a variable on a deployment environment
+    Set {
+        /// Repository in format workspace/repo-slug
+        repo: String,
+
+        /// Environment UUID (see `environment list`)
+        environment: String,
+
+        /// Variable name
+        key: String,
+
+        /// Variable value
+        value: String,
+
+        /// Mask the value in logs and the UI
+        #[arg(long)]
+        secured: bool,
+    },
+
+    /// Delete a variable from a deployment environment by key
+    Delete {
+        /// Repository in format workspace/repo-slug
+        repo: String,
+
+        /// Environment UUID (see `environment list`)
+        environment: String,
+
+        /// Variable name
+        key: String,
 
         /// Skip confirmation prompt
         #[arg(short, long)]
@@ -372,6 +433,208 @@ impl EnvironmentCommands {
 
                 Ok(())
             }
+
+            EnvironmentCommands::Variable { command } => command.run().await,
+        }
+    }
+}
+
+/// Table row for `environment variable list`.
+#[derive(Tabled)]
+struct EnvironmentVariableRow {
+    #[tabled(rename = "KEY")]
+    key: String,
+    #[tabled(rename = "VALUE")]
+    value: String,
+    #[tabled(rename = "SECURED")]
+    secured: String,
+    #[tabled(rename = "UUID")]
+    uuid: String,
+}
+
+/// Find a variable's UUID by key (secured or not) within one environment.
+fn find_environment_variable_uuid(
+    variables: &[EnvironmentVariable],
+    key: &str,
+) -> Option<String> {
+    variables
+        .iter()
+        .find(|v| v.key.as_deref() == Some(key))
+        .and_then(|v| v.uuid.clone())
+}
+
+/// Blank out `value` on secured variables so a JSON dump never leaks a secret
+/// (the API already omits it, but a locally-constructed value could sneak in).
+fn masked_environment_variables(variables: &[EnvironmentVariable]) -> Vec<EnvironmentVariable> {
+    variables
+        .iter()
+        .map(|v| {
+            let mut v = v.clone();
+            if v.secured.unwrap_or(false) {
+                v.value = None;
+            }
+            v
+        })
+        .collect()
+}
+
+fn environment_variable_rows(variables: &[EnvironmentVariable]) -> Vec<EnvironmentVariableRow> {
+    variables
+        .iter()
+        .map(|v| {
+            let secured = v.secured.unwrap_or(false);
+            EnvironmentVariableRow {
+                key: v.key.clone().unwrap_or_default(),
+                value: if secured {
+                    "<secured>".into()
+                } else {
+                    v.value.clone().unwrap_or_default()
+                },
+                secured: if secured { "yes" } else { "no" }.into(),
+                uuid: v.uuid.clone().unwrap_or_else(|| "-".into()),
+            }
+        })
+        .collect()
+}
+
+impl EnvironmentVariableCommands {
+    /// Execute the environment-variable subcommand.
+    pub async fn run(self) -> Result<()> {
+        match self {
+            EnvironmentVariableCommands::List { repo, environment } => {
+                let (workspace, repo_slug) = parse_repo(&repo)?;
+                let environment = ensure_braced(&environment);
+                let client = BitbucketClient::from_stored().await?;
+
+                let variables = client
+                    .list_environment_variables(&workspace, &repo_slug, &environment)
+                    .await?;
+
+                if output_json() {
+                    return print_json(&masked_environment_variables(&variables));
+                }
+
+                if variables.is_empty() {
+                    println!("No variables on environment {}", environment);
+                    return Ok(());
+                }
+
+                println!("{}", Table::new(environment_variable_rows(&variables)));
+
+                Ok(())
+            }
+
+            EnvironmentVariableCommands::Set {
+                repo,
+                environment,
+                key,
+                value,
+                secured,
+            } => {
+                let (workspace, repo_slug) = parse_repo(&repo)?;
+                let environment = ensure_braced(&environment);
+                let client = BitbucketClient::from_stored().await?;
+
+                let input = EnvironmentVariableInput {
+                    key: key.clone(),
+                    value,
+                    secured,
+                };
+
+                let variables = client
+                    .list_environment_variables(&workspace, &repo_slug, &environment)
+                    .await?;
+
+                match find_environment_variable_uuid(&variables, &key) {
+                    Some(uuid) => {
+                        let variable = client
+                            .update_environment_variable(
+                                &workspace,
+                                &repo_slug,
+                                &environment,
+                                &uuid,
+                                &input,
+                            )
+                            .await
+                            .with_context(|| {
+                                format!(
+                                    "updating variable '{}' (it may have been deleted \
+                                     concurrently — re-run to create it)",
+                                    key
+                                )
+                            })?;
+                        if output_json() {
+                            return print_json(&variable);
+                        }
+                        println!(
+                            "{} Updated environment variable {}",
+                            "✓".green(),
+                            key.cyan()
+                        );
+                    }
+                    None => {
+                        let variable = client
+                            .create_environment_variable(
+                                &workspace,
+                                &repo_slug,
+                                &environment,
+                                &input,
+                            )
+                            .await?;
+                        if output_json() {
+                            return print_json(&variable);
+                        }
+                        println!(
+                            "{} Created environment variable {}",
+                            "✓".green(),
+                            key.cyan()
+                        );
+                    }
+                }
+
+                Ok(())
+            }
+
+            EnvironmentVariableCommands::Delete {
+                repo,
+                environment,
+                key,
+                yes,
+            } => {
+                let (workspace, repo_slug) = parse_repo(&repo)?;
+                let environment = ensure_braced(&environment);
+                let client = BitbucketClient::from_stored().await?;
+
+                let variables = client
+                    .list_environment_variables(&workspace, &repo_slug, &environment)
+                    .await?;
+                let uuid =
+                    find_environment_variable_uuid(&variables, &key).ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "No variable named '{}' on environment {}",
+                            key,
+                            environment
+                        )
+                    })?;
+
+                if !yes
+                    && !confirm_or_abort(format!("Delete environment variable {}?", key.red()))?
+                {
+                    return Ok(());
+                }
+
+                client
+                    .delete_environment_variable(&workspace, &repo_slug, &environment, &uuid)
+                    .await?;
+
+                if output_json() {
+                    return print_json(&serde_json::json!({ "ok": true }));
+                }
+
+                println!("{} Deleted environment variable {}", "✓".green(), key);
+
+                Ok(())
+            }
         }
     }
 }
@@ -568,6 +831,52 @@ mod tests {
 
     use super::*;
     use crate::models::DeploymentState;
+
+    fn env_var(key: &str, value: Option<&str>, secured: bool, uuid: &str) -> EnvironmentVariable {
+        EnvironmentVariable {
+            uuid: Some(uuid.to_string()),
+            key: Some(key.to_string()),
+            value: value.map(|v| v.to_string()),
+            secured: Some(secured),
+        }
+    }
+
+    #[test]
+    fn find_environment_variable_uuid_matches_by_key() {
+        let vars = vec![
+            env_var("VITE_API_URL", Some("https://x"), false, "{aaa}"),
+            env_var("AWS_ROLE_ARN", Some("arn:..."), false, "{bbb}"),
+        ];
+        assert_eq!(
+            find_environment_variable_uuid(&vars, "AWS_ROLE_ARN"),
+            Some("{bbb}".to_string())
+        );
+        assert_eq!(find_environment_variable_uuid(&vars, "MISSING"), None);
+    }
+
+    #[test]
+    fn masked_environment_variables_blanks_secured_values() {
+        let vars = vec![
+            env_var("PLAIN", Some("visible"), false, "{a}"),
+            env_var("SECRET", Some("leak"), true, "{b}"),
+        ];
+        let masked = masked_environment_variables(&vars);
+        assert_eq!(masked[0].value.as_deref(), Some("visible"));
+        assert_eq!(masked[1].value, None);
+    }
+
+    #[test]
+    fn environment_variable_rows_shows_secured_placeholder() {
+        let vars = vec![
+            env_var("PLAIN", Some("v"), false, "{a}"),
+            env_var("SECRET", Some("v"), true, "{b}"),
+        ];
+        let rows = environment_variable_rows(&vars);
+        assert_eq!(rows[0].value, "v");
+        assert_eq!(rows[0].secured, "no");
+        assert_eq!(rows[1].value, "<secured>");
+        assert_eq!(rows[1].secured, "yes");
+    }
 
     #[test]
     fn normalize_key_trims_surrounding_whitespace() {
