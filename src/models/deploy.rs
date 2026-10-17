@@ -51,6 +51,32 @@ pub struct CreateEnvironmentRequest {
 }
 
 // ---------------------------------------------------------------------------
+// Deployment-environment variables
+// ---------------------------------------------------------------------------
+
+/// A variable configured on a single deployment environment.
+///
+/// These are distinct from repository and workspace pipeline variables: their
+/// value is scoped to one environment (`deployment: <env>` steps), so the same
+/// key can hold different values per environment. Secured variables come back
+/// from the API without a `value`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EnvironmentVariable {
+    pub uuid: Option<String>,
+    pub key: Option<String>,
+    pub value: Option<String>,
+    pub secured: Option<bool>,
+}
+
+/// Request body for creating or updating a deployment-environment variable.
+#[derive(Debug, Clone, Serialize)]
+pub struct EnvironmentVariableInput {
+    pub key: String,
+    pub value: String,
+    pub secured: bool,
+}
+
+// ---------------------------------------------------------------------------
 // Deployments
 // ---------------------------------------------------------------------------
 
